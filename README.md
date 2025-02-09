@@ -51,7 +51,13 @@ cmake --build . --config Release --parallel $(nproc)
 cd bin # there should be a llama-server there that can now be run
 ```
 
+## Utils
+`nvidia.py` can be used to keep checking GPU usage. Currently watch segfaults on Ubuntu 20.04, so this can be run in place of that to monitor:
 
+```bash
+chmod +x nvidia.py
+sudo ./nvidia.py
+```
 
 
 
