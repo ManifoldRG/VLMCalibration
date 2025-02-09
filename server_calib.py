@@ -14,7 +14,7 @@ headers = {"Content-Type": "application/json"}
 
 dataset = load_dataset("openai/gsm8k", "main")
 records = []
-dataset_split = "test"
+dataset_split = "train"
 
 
 def parse_answer(output: str) -> int:
@@ -109,8 +109,14 @@ def process_single_question(idx):
         print(f"Error processing question {idx}: {e}")
         return None
 
-
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_name", choices=["llama", "qwen", "gemma"], help="Name of model to use")
+    parser.add_argument("--dataset_split", choices=["train", "test"], help="Dataset split to use")
+    args = parser.parse_args()
+    assert dataset_split == args.dataset_split, f"Dataset split {dataset_split} does not match {args.dataset_split}"
+
     start_idx = 0  # Starting from beginning of dataset
     end_idx = len(dataset[dataset_split])
 
@@ -119,19 +125,13 @@ if __name__ == "__main__":
         for idx in range(start_idx, end_idx):
             futures.append(executor.submit(process_single_question, idx))
 
-        for idx, future in enumerate(
-            tqdm(
-                as_completed(futures),
-                total=end_idx - start_idx,
-                desc="Processing dataset",
-            )
-        ):
+        for idx, future in enumerate(tqdm(as_completed(futures), total=end_idx - start_idx, desc="Processing dataset")):
             result = future.result()
             if result:
                 records.append(result)
 
             if (len(records) > 0) and (len(records) % 100 == 0):
-                pd.DataFrame.from_records(records).to_csv("records_test_full_mid_qwen.csv")
+                pd.DataFrame.from_records(records).to_csv(f"records_{args.dataset_split}_full_mid_{args.model_name}.csv")
 
     # Final save
-    pd.DataFrame.from_records(records).to_csv("records_test_full_qwen.csv")
+    pd.DataFrame.from_records(records).to_csv(f"records_{args.dataset_split}_full_{args.model_name}.csv")
