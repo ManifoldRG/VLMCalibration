@@ -11,12 +11,12 @@ Fit on the GSM8k train set
 Switched to llama.cpp C++ server for faster parallel inference instead of sequential python
 
 Example commands to download model (example):
-```
+```bash
 huggingface-cli download bartowski/Qwen2.5-7B-Instruct-GGUF --include "Qwen2.5-7B-Instruct-Q8_0.gguf" --local-dir ./models
 ```
 
 Command to run server (example):
-```
+```bash
 ./llama-server -m /opt/dlami/nvme/VLMCalibration/models/Meta-Llama-3.1-8B-Instruct-Q8_0.gguf -c 16384 -np 8 -t 8 -tb 8 -b 4096 -ub 2048 -cb --gpu-layers 300
 ```
 
@@ -33,6 +33,23 @@ Command to run server (example):
 | `-cb` | Enable continuous batching |
 | `--gpu-layers` | Number of layers to offload to GPU |
 
+
+## Steps to setup llama.cpp C++ server
+```bash
+sudo apt update
+sudo apt install -y build-essential cmake git curl libcurl4-openssl-dev
+nvcc --version # check CUDA installed
+```
+
+```bash
+git clone https://github.com/ggerganov/llama.cpp.git
+cd llama.cpp
+mkdir build
+cd build
+cmake -DGGML_CUDA=on -DLLAMA_CURL=on -DCMAKE_BUILD_TYPE=Release ..
+cmake --build . --config Release --parallel $(nproc)
+cd bin # there should be a llama-server there that can now be run
+```
 
 
 
