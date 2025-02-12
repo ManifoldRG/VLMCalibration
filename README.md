@@ -17,6 +17,7 @@ huggingface-cli download bartowski/Qwen2.5-7B-Instruct-GGUF --include "Qwen2.5-7
 
 Command to run server (example):
 ```bash
+# cd to the build/bin directory under llama.cpp folder where there is the llama-server binary, see setup below
 ./llama-server -m /opt/dlami/nvme/VLMCalibration/models/Meta-Llama-3.1-8B-Instruct-Q8_0.gguf -c 16384 -np 8 -t 8 -tb 8 -b 4096 -ub 2048 -cb --gpu-layers 300
 ```
 

@@ -1,0 +1,3 @@
+usage: server_calib.py [-h] [--model_name {llama,qwen,gemma}]
+                       [--dataset_split {train,test}]
+server_calib.py: error: argument --dataset_split: invalid choice: 'tr' (choose from 'train', 'test')

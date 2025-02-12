@@ -62,16 +62,30 @@ def process_single_question(idx):
         response_text = first_response["choices"][0]["message"]["content"]
         answer = parse_answer(response_text)
 
+        inject_cot_payload = {
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": question_str},
+                {"role": "assistant", "content": response_text},
+                {"role": "user", "content": "Before answering whether your above answer is correct, please provide a detailed chain-of-thought explanation of your reasoning. Explain step-by-step how you arrived at your answer and why you think it is correct or might be incorrect."},
+            ],
+            "temperature": 0.7,
+            "max_tokens": 1024,
+        }
+        inject_cot_response = send_request(inject_cot_payload)
+        if not inject_cot_response:
+            return None
+
+        inject_cot_text = inject_cot_response["choices"][0]["message"]["content"]
         # Second request for confidence check
         second_payload = {
             "messages": [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": question_str},
                 {"role": "assistant", "content": response_text},
-                {
-                    "role": "user",
-                    "content": "Is the above answer correct? Answer only with the single word 'true' or 'false'.",
-                },
+                {"role": "user", "content": "Before answering whether your above answer is correct, please provide a detailed chain-of-thought explanation of your reasoning. Explain step-by-step how you arrived at your answer and why you think it is correct or might be incorrect."},
+                {"role": "assistant", "content": inject_cot_text},
+                {"role": "user", "content": "Is the above answer correct? Answer only with the single word 'true' or 'false'."},
             ],
             "temperature": 0.7,
             "max_tokens": 1,
@@ -98,6 +112,7 @@ def process_single_question(idx):
             "response": response_text,
             "answer": answer,
             "p_true": p_true,
+            "inject_cot": inject_cot_text,
             "true_answer": true_answer,
             "correct": (
                 (abs(answer - true_answer) < 0.0001)
@@ -120,7 +135,7 @@ if __name__ == "__main__":
     start_idx = 0  # Starting from beginning of dataset
     end_idx = len(dataset[dataset_split])
 
-    with ThreadPoolExecutor(max_workers=12) as executor:
+    with ThreadPoolExecutor(max_workers=16) as executor:
         futures = []
         for idx in range(start_idx, end_idx):
             futures.append(executor.submit(process_single_question, idx))
@@ -130,8 +145,8 @@ if __name__ == "__main__":
             if result:
                 records.append(result)
 
-            if (len(records) > 0) and (len(records) % 100 == 0):
-                pd.DataFrame.from_records(records).to_csv(f"records_{args.dataset_split}_full_mid_{args.model_name}.csv")
+            if (len(records) > 0) and (len(records) % 50 == 0):
+                pd.DataFrame.from_records(records).to_csv(f"cot_records_{args.dataset_split}_full_mid_{args.model_name}.csv")
 
     # Final save
-    pd.DataFrame.from_records(records).to_csv(f"records_{args.dataset_split}_full_{args.model_name}.csv")
+    pd.DataFrame.from_records(records).to_csv(f"cot_records_{args.dataset_split}_full_{args.model_name}.csv")
