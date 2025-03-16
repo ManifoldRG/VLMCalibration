@@ -134,7 +134,7 @@ if __name__ == "__main__":
     start_idx = 0
     # end_idx = len(dataset[dataset_split])
     end_idx = 4000
-    with ThreadPoolExecutor(max_workers=24) as executor:
+    with ThreadPoolExecutor(max_workers=20) as executor:
         futures = []
         for idx in range(start_idx, end_idx):
             futures.append(executor.submit(process_single_question, dataset, dataset_split, idx))
