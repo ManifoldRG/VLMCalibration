@@ -2,7 +2,7 @@
 
 ## Experiment Tracking
 
-| **Model**                           | **gsm8k** | **gsm8k-cot** | **mmlu** | **mmlu-cot** |
+| **Model**                           | **gsm8k-zs** | **gsm8k-cot** | **mmlu-zs** | **mmlu-cot** |
 |:----------------------------------:|:---------:|:-------------:|:--------:|:------------:|
 | **Meta-Llama-3.1-8B-Instruct-Q8_0**|     ✅    |       ✅      |     ✅   |      ❌      |
 | **gemma-2-9b-it-Q8_0**             |     ✅    |       ✅      |     ✅   |      ❌      |
@@ -10,7 +10,8 @@
 | **gpt 4o**                         |     ✅    |       ❌      |     ❌   |      ❌      |
 | **gpt 4o mini**                    |     ✅    |       ❌      |     ❌   |      ❌      |
 
-
+cot_exp = Chain of Thought Experiments
+zs_exp = Zero Shot Experiments
 
 ### Calibration Experiments conducted:
 
