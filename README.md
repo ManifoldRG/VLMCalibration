@@ -1,12 +1,15 @@
 # VLMCalibration
 
-| Model                 | gsm8k | gsm8k-cot | mmlu | mmlu-cot |
-|-----------------------|:-----:|:---------:|:----:|:--------:|
-| llama 3.1 8b instruct | [x]   | [x]       | [x]  | [ ]      |
-| gemma 2 9b instruct   | [x]   | [x]       | [x]  | [ ]      |
-| qwen 2.5 7b instruct  | [x]   | [x]       | [x]  | [ ]      |
-| gpt 4o                | [x]   | [ ]       | [ ]  | [ ]      |
-| gpt 4o mini           | [x]   | [ ]       | [ ]  | [ ]      |
+## Experiment Tracking
+
+| **Model**                           | **gsm8k** | **gsm8k-cot** | **mmlu** | **mmlu-cot** |
+|:----------------------------------:|:---------:|:-------------:|:--------:|:------------:|
+| **Meta-Llama-3.1-8B-Instruct-Q8_0**|     ✅    |       ✅      |     ✅   |      ❌      |
+| **gemma-2-9b-it-Q8_0**             |     ✅    |       ✅      |     ✅   |      ❌      |
+| **Qwen2.5-7B-Instruct-Q8_0**       |     ✅    |       ✅      |     ✅   |      ❌      |
+| **gpt 4o**                         |     ✅    |       ❌      |     ❌   |      ❌      |
+| **gpt 4o mini**                    |     ✅    |       ❌      |     ❌   |      ❌      |
+
 
 
 ### Calibration Experiments conducted:
