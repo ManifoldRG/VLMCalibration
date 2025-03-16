@@ -9,9 +9,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import matplotlib.pyplot as plt
 import seaborn as sns
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 # OpenAI configuration
-OPENAI_API_KEY = "TEST"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 dataset = load_dataset("openai/gsm8k", "main")

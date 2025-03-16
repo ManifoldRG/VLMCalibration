@@ -9,7 +9,7 @@ import seaborn as sns
 # ---------------------------
 # Configuration
 # ---------------------------
-MODEL_NAME = "gsm8k/openai"  # Directory for saving plots
+MODEL_NAME = "gsm8k"  # Directory for saving plots
 os.makedirs(MODEL_NAME, exist_ok=True)
 
 
