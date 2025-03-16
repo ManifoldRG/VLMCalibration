@@ -72,6 +72,10 @@ chmod +x nvidia.py
 sudo ./nvidia.py
 ```
 
-
+## vLLM Info
+This is still in development but might help increase inference speed. Details yet to be finalized, but also might not work optimally with GGUFs.
+```bash
+vllm serve ./models/Meta-Llama-3.1-8B-Instruct-Q8_0.gguf --tokenizer meta-llama/Llama-3.1-8B-Instruct --trust-remote-code --max-model-len 4096 --host localhost --port 8080 --max-num-batched-tokens 8192
+```
 
 
