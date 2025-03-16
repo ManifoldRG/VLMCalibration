@@ -1,5 +1,14 @@
 # VLMCalibration
 
+| Model                 | gsm8k | gsm8k-cot | mmlu | mmlu-cot |
+|-----------------------|:-----:|:---------:|:----:|:--------:|
+| llama 3.1 8b instruct | [x]   | [x]       | [x]  | [ ]      |
+| gemma 2 9b instruct   | [x]   | [x]       | [x]  | [ ]      |
+| qwen 2.5 7b instruct  | [x]   | [x]       | [x]  | [ ]      |
+| gpt 4o                | [x]   | [ ]       | [ ]  | [ ]      |
+| gpt 4o mini           | [x]   | [ ]       | [ ]  | [ ]      |
+
+
 ### Calibration Experiments conducted:
 
 1. Meta-Llama-3.1-8B-Instruct-Q8_0
