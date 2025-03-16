@@ -1,0 +1,187 @@
+,question,options,response,answer,p_true,true_answer,correct
+0,Scrub typhus is transmitted by: September 2004,"['Louse', 'Tick', 'Mite', 'Milk']",The final answer is C.,C,0.9977154738278139,C,True
+1,"Following endaerectomy on the right common carotid, a patient is found to be blind in the right eye. It is appears that a small thrombus embolized during surgery and lodged in the aery supplying the optic nerve. Which aery would be blocked?","['Central aery of the retina', 'Infraorbital aery', 'Lacrimal aery', 'Nasociliary aretry']","To determine which artery would be blocked, we need to consider the blood supply to the eye, particularly the optic nerve. The central artery of the retina is responsible for supplying oxygenated blood to the retina and the optic nerve. This artery is a direct continuation of the ophthalmic artery, which in turn is a branch of the internal carotid artery. Given that a small thrombus embolized during surgery and lodged in the artery supplying the optic nerve, it is most likely that the central artery of the retina was blocked, leading to blindness in the right eye.
+
+The final answer is A.",A,0.9812647222615003,A,True
+2,Per rectum examination is not a useful test for diagnosis of,"['Anal fissure', 'Hemorrhoid', 'Pilonidal sinus', 'Rectal ulcer']","A per rectum (PR) examination involves a healthcare provider inserting a gloved finger into the rectum to feel for abnormalities. This can be useful for diagnosing conditions such as hemorrhoids (B), rectal ulcers (D), and even pilonidal sinus (C), as the healthcare provider can feel for masses or abnormalities.
+
+However, an anal fissure (A) is typically diagnosed through other means, such as visual examination, patient history, and sometimes with the use of an anoscope. A PR examination may not be as useful for diagnosing an anal fissure, as it is primarily a symptom-based diagnosis, and the PR exam may not provide enough information to confirm the presence of a fissure.
+
+The final answer is A.",A,0.65362921823607,C,False
+3,Chronic urethral obstruction due to benign prismatic hyperplasia can lead to the following change in kidney parenchyma,"['Hyperplasia', 'Hyperophy', 'Atrophy', 'Dyplasia']","To answer this question, we need to consider the effects of chronic urethral obstruction on the kidneys, particularly in the context of benign prostatic hyperplasia (BPH).
+
+Chronic urethral obstruction due to BPH leads to increased pressure in the urinary tract, which can cause backflow of urine into the kidneys. This backflow, also known as vesicoureteral reflux, can cause damage to the kidneys over time. Specifically, it can lead to a decrease in the size and function of the kidney tissue, resulting in a change in the kidney parenchyma.
+
+The correct term to describe this change is ""atrophy,"" which refers to the shrinkage or wasting of tissue, in this case, the kidney parenchyma.
+
+The final answer is C.",C,0.876753008262844,C,True
+4,Abnormal vascular patterns seen with colposcopy in case of cervical intraepithelial neoplasia  are all except,"['Punctation', 'Mosaicism', 'Satellite lesions', 'Atypical vessels']","To answer this question, we need to consider the characteristics of abnormal vascular patterns seen with colposcopy in cases of cervical intraepithelial neoplasia (CIN).
+
+Punctation (A) refers to a fine network of blood vessels that appear as tiny dots or puncta. This is a common finding in CIN, where the normal architecture of the cervix is disrupted, allowing for the visualization of these fine vessels.
+
+Mosaicism (B) describes a pattern where the surface of the cervix appears as a mosaic of white and red areas. This is also a common finding in CIN, where the abnormal cells can disrupt the normal surface architecture of the cervix.
+
+Satellite lesions (C) refer to small, secondary lesions that appear around a primary lesion. While satellite lesions can be associated with various cervical pathologies, they are not a specific vascular pattern seen in CIN.
+
+Atypical vessels (D) describe blood vessels that do not follow the normal pattern of the cervix. These vessels can be seen in CIN, where the abnormal cells can disrupt the normal vascular architecture of the cervix.
+
+The final answer is C.",C,0.34822491797421273,C,True
+5,Which vitamin is supplied from only animal source:,"['Vitamin C', 'Vitamin B7', 'Vitamin B12', 'Vitamin D']","To determine the correct answer, let's examine each option:
+
+A. Vitamin C - This vitamin is found in various plant-based foods, such as citrus fruits, leafy greens, and bell peppers. Therefore, it is not solely supplied from animal sources.
+
+B. Vitamin B7 (Biotin) - Biotin is found in a variety of foods, including nuts, seeds, avocados, and some whole grains. While it can be found in animal products, it is not exclusive to animal sources.
+
+C. Vitamin B12 - This vitamin is found primarily in animal products, such as meat, fish, poultry, eggs, and dairy products. It is also added to some plant-based milk alternatives and cereals. Since it is not found naturally in plant-based foods, it is supplied primarily from animal sources.
+
+D. Vitamin D - While Vitamin D is often associated with sunlight exposure, it can also be obtained from animal sources, such as fatty fish, egg yolks, and fortified dairy products. Additionally, it can be synthesized in the skin upon exposure to sunlight.
+
+Given the information, the correct answer is the vitamin that is primarily supplied from animal sources.
+
+The final answer is C.",C,0.9875149394165701,C,True
+6,Growth hormone has its effect on growth through?,"['Directly', 'IG1-1', 'Thyroxine', 'Intranuclear receptors']","To determine the correct answer, let's analyze the options in relation to how growth hormone (GH) affects growth.
+
+A. Directly: GH does not have a direct effect on growth. It stimulates the production of other hormones and growth factors that ultimately lead to growth.
+
+B. IG1-1: GH stimulates the liver and other tissues to produce insulin-like growth factor 1 (IGF-1), also known as somatomedin C. IGF-1 is a key mediator of the growth-promoting effects of GH, making this a strong candidate.
+
+C. Thyroxine: Thyroxine is a hormone produced by the thyroid gland and is involved in regulating metabolism. While the thyroid hormone can influence growth indirectly, it is not the primary mechanism through which GH exerts its effects on growth.
+
+D. Intranuclear receptors: GH exerts its effects by binding to GH receptors on the surface of cells, not through intranuclear receptors. This option does not accurately describe the mechanism of GH action.
+
+Considering the above information, the correct answer is B. IG1-1, as GH stimulates the production of IGF-1, which in turn promotes growth.
+
+The final answer is B.",B,0.8321505282695755,B,True
+7,Naglers reaction is shown by,"['Clostridium tetani', 'Clostridium botulinum', 'Clostridium perfringens', 'Clostridium septicum']","To determine the correct answer, let's examine the characteristics of Nagler's reaction. Nagler's reaction is a test used to detect the presence of alpha toxin, also known as phospholipase C, which is produced by Clostridium perfringens. This toxin is responsible for the gas gangrene and other diseases caused by Clostridium perfringens.
+
+Given this information, the correct answer is:
+
+The final answer is C.",C,0.8968590840841563,C,True
+8,Characteristics of Remifentanyl – a) Metabolised by plasma esteraseb) Short half lifec) More potent than Alfentanyld) Dose reduced in hepatic and renal diseasee) Duration of action more than Alfentanyl,"['ab', 'bc', 'abc', 'bcd']","To answer this question, let's break down each option related to Remifentanil:
+
+a) Metabolised by plasma esterase: Remifentanil is indeed metabolized by plasma esterases, which is a key characteristic of this medication. This process is responsible for its rapid onset and offset of action.
+
+b) Short half-life: Remifentanil has a very short half-life, typically ranging from 3 to 10 minutes. This is due to its rapid metabolism by plasma esterases.
+
+c) More potent than Alfentanyl: Remifentanil is indeed more potent than Alfentanyl. Its potency allows for effective pain management with smaller doses.
+
+d) Dose reduced in hepatic and renal disease: The metabolism of Remifentanil is primarily by non-enzymatic ester hydrolysis and is not significantly affected by liver or kidney function. Therefore, dose adjustments in hepatic and renal disease are not necessary.
+
+e) Duration of action more than Alfentanyl: The duration of action of Remifentanil is shorter than that of Alfentanyl due to its rapid metabolism.
+
+Given the characteristics of Remifentanil, the correct options are a, b, and c.
+
+The final answer is C.",C,0.3266236030926025,C,True
+9,All of the following are surgical options for morbid obesity except -,"['Adjustable gastric banding', 'Biliopancreatic diversion', 'Duodenal Switch', 'Roux en Y Duodenal By pass']","To answer this question, let's evaluate each option in the context of surgical options for morbid obesity:
+
+A. Adjustable gastric banding: This is a common and well-established surgical procedure for morbid obesity. It involves placing an adjustable band around the upper part of the stomach to create a small pouch, limiting food intake.
+
+B. Biliopancreatic diversion: This is indeed another surgical option for morbid obesity, although it's a more complex procedure. It involves removing a portion of the stomach and rerouting the small intestine to limit nutrient absorption.
+
+C. Duodenal Switch: Similar to the biliopancreatic diversion, the duodenal switch is a more complex surgical procedure that involves removing a portion of the stomach and rerouting the small intestine to reduce food intake and nutrient absorption.
+
+D. Roux en Y Duodenal By pass: This is actually a less common surgical procedure for morbid obesity. It primarily involves bypassing a portion of the small intestine rather than altering the stomach. It's less commonly performed compared to the other options listed, which directly alter the stomach and involve more substantial changes to the digestive system.
+
+Given the context of commonly performed surgical procedures for morbid obesity, Roux en Y Duodenal By pass stands out as the less typical option.
+
+The final answer is D.",D,0.06259735485973851,D,True
+10,With which of the following receptors theophylline has an antagonistic interaction ?,"['Histamine receptors', 'Bradykinin receptors', 'Adenosine receptors', 'Imidazoline receptors']","The correct answer is C. Adenosine receptors.
+
+Theophylline is a methylxanthine derivative with bronchodilatory and cardiovascular effects. It is a non-selective adenosine receptor antagonist, which contributes to its therapeutic effects in conditions such as asthma and chronic obstructive pulmonary disease (COPD). By blocking adenosine receptors, theophylline increases the levels of cyclic AMP (cAMP) in the airway smooth muscle, leading to bronchodilation.
+
+The final answer is C.",C,0.9983277244550843,C,True
+11,The process of hardening a cement matrix through hydration with oral fluids  to achieve greater mechanical strength is known as:,"['Maturation', 'Setting', 'Hardening', 'Mineralization']","The correct answer is A. Maturation.
+
+Maturation refers to the process of hardening a cement matrix through hydration with oral fluids, which results in greater mechanical strength. This is a key concept in restorative dentistry, particularly in relation to dental cements and composites.
+
+The final answer is A.",A,0.3730584669836213,A,True
+12,The pharmakokinetic change occurring in geriatric patient is due to,"['Gastric absorption', 'Liver metabolism', 'Renal clearance', 'Hypersensitivity']","In geriatric patients, the pharmacokinetic changes are primarily due to alterations in renal function, specifically reduced renal clearance. As people age, the kidneys' ability to filter waste and excess substances from the blood decreases, leading to changes in how medications are processed and eliminated from the body.
+
+The final answer is C.",C,0.9303767473326107,C,True
+13,Hypomimia is ?,"['Decreased ability to copy', 'Decreased execution', 'Deficit of expression by gesture', 'Deficit of fluent speech']","To answer this question, let's break down the options and the term ""hypomimia"".
+
+Hypomimia refers to a decrease in facial movements, often resulting in a reduced ability to smile or express emotions through facial expressions. This condition is commonly associated with neurological disorders, such as Parkinson's disease.
+
+Let's examine the options:
+
+A. Decreased ability to copy - This option refers to a deficit in motor or cognitive functions, particularly in tasks that require imitation or reproduction. It is not directly related to facial expressions.
+
+B. Decreased execution - This option is broad and could apply to various motor functions. However, it is not specific to facial movements.
+
+C. Deficit of expression by gesture - This option directly addresses the concept of reduced facial movements and expression, aligning with the definition of hypomimia.
+
+D. Deficit of fluent speech - This option refers to a disorder where a person has difficulty speaking in a normal, smooth flow of speech, often seen in conditions like aphasia. It is not related to facial expressions.
+
+Based on the analysis, the correct answer is the option that directly relates to the decreased ability to express emotions through facial movements.
+
+The final answer is C.",C,0.9572890190247371,C,True
+14,For a positively skewed curve which measure of central tendency is largest,"['Mean', 'Mode', 'Median', 'All are equal']","In a positively skewed curve, the majority of the data points are concentrated on the left side, with a few extreme values on the right side. This means that the mean is pulled upwards by the extreme values, making it larger than the median, which is more resistant to the influence of outliers.
+
+The mode is the value that appears most frequently in the data set, and it is not necessarily affected by the extreme values.
+
+Therefore, in a positively skewed curve, the mean is generally the largest measure of central tendency.
+
+The final answer is A.",A,0.9583042060205491,A,True
+15,A 60 yr old chronic smoker presents with painless gross hematuria of 1 day duration. Investigation of choice to know the cause of hematuria,"['USG', 'X-ray KUB', 'Urine routine', 'Urine microscopy for malignant cytology cells']","Given the patient's symptoms and history of chronic smoking, a likely diagnosis to consider is bladder cancer. Painless gross hematuria is a common presentation of bladder cancer.
+
+For investigating the cause of hematuria, the investigation of choice is the one that can detect abnormalities in the bladder lining, such as cancer cells.
+
+Option D, Urine microscopy for malignant cytology cells, is the best choice because it can detect cancer cells in the urine. This is a direct and targeted test for diagnosing bladder cancer.
+
+Options A, USG (Ultrasonography), and B, X-ray KUB (Kidneys, Ureters, and Bladder), are imaging tests that can help identify structural abnormalities in the urinary tract but are not as specific for detecting cancer cells.
+
+Option C, Urine routine, can help identify infection or other causes of hematuria but is not the most sensitive test for detecting bladder cancer.
+
+The final answer is D.",D,0.8400976028431419,D,True
+16,"Which of the following statements are True/False? 1. Hirsutism, which is defined as androgen-dependent excessive male pattern hair growth, affects approximately 25% of women. 2. Virilization refers to a condition in which androgen levels are sufficiently high to cause additional signs and symptoms. 3. Frequently, patients with growth hormone excess (i.e., acromegaly) present with hirsutism. 4. A simple and commonly used method to grade hair growth is the modified scale of Ferriman and Gallwey. 5. Scores above 8 suggest excess androgen-mediated hair growth.","['1, 2, 3 True & 4, 5 false', '1, 3, 5 True & 2, 4 false', '2, 4, 5 True & 1, 3 false', '1, 2, 3, 4 True & 5 false']","Let's evaluate each statement:
+
+1. Hirsutism affects approximately 25% of women. This statement is TRUE. Hirsutism is a common condition in women, affecting around 10-20% of women of reproductive age, although some sources may estimate it to be as high as 25%.
+2. Virilization refers to a condition in which androgen levels are sufficiently high to cause additional signs and symptoms. This statement is TRUE. Virilization is a condition characterized by the development of male secondary sexual characteristics in females, often due to high levels of androgens.
+3. Frequently, patients with growth hormone excess (i.e., acromegaly) present with hirsutism. This statement is FALSE. While acromegaly can cause hormonal imbalances, it is not commonly associated with hirsutism. Hirsutism is more commonly linked to polycystic ovary syndrome (PCOS) or other conditions that cause excess androgen production.
+4. A simple and commonly used method to grade hair growth is the modified scale of Ferriman and Gallwey. This statement is TRUE. The Ferriman and Gallwey scale is a widely used method for evaluating hirsutism, assessing hair growth in different areas of the body.
+5. Scores above 8 suggest excess androgen-mediated hair growth. This statement is TRUE. According to the Ferriman and Gallwey scale, scores above 8 are generally considered indicative of hirsutism.
+
+Considering the evaluations above, the correct answer is:
+
+The final answer is D.",D,0.027961471818631598,C,False
+17,True regarding lag phase is?,"['Time taken to adpt in the new environment', 'Growth occurs exponentially', 'The plateau in lag phase is due to cell death', 'It is the 2nd phase in bacterial growth curve']","To determine the correct answer, let's break down the characteristics of the lag phase in a bacterial growth curve:
+
+1. **Adaptation**: During the lag phase, the bacteria are adapting to their new environment. This includes adjusting to the new nutrient availability, temperature, pH, and other conditions. Therefore, option A, ""Time taken to adapt in the new environment,"" is correct.
+
+2. **Growth Pattern**: In the lag phase, the bacteria are preparing for growth by synthesizing proteins and other molecules necessary for rapid multiplication. However, there is no exponential growth during this phase; that occurs in the log phase. So, option B, ""Growth occurs exponentially,"" is incorrect because exponential growth happens after the lag phase.
+
+3. **Cell Death**: The plateau or stationary phase of the bacterial growth curve is characterized by a balance between the rate of cell division and the rate of cell death, not the lag phase. In the lag phase, there is no significant cell death, as the cells are primarily preparing to grow. Thus, option C, ""The plateau in lag phase is due to cell death,"" is incorrect.
+
+4. **Phase in Bacterial Growth Curve**: The lag phase is indeed the initial phase of the bacterial growth curve, occurring before the exponential or log phase. However, the question specifically asks which option is ""True regarding lag phase,"" and the focus is on what happens during this phase, making option A a more accurate description of the lag phase.
+
+The final answer is A.",A,0.9404589648916685,A,True
+18,Superior vena cava is derived from:,"['Aortic arch', 'Pharyngeal arch', 'Cardinal vein', 'Vitelline vein']","To determine the correct answer, let's review the embryological development of the venous system.
+
+The superior vena cava (SVC) is a major vein that returns deoxygenated blood from the upper body to the heart. During embryological development, it is formed from the anterior cardinal veins.
+
+The anterior cardinal veins are a pair of large, symmetrical veins that drain blood from the head, neck, and upper limbs. They eventually merge to form the superior vena cava.
+
+Now, let's look at the options:
+
+A. Aortic arch - The aortic arch is part of the arterial system, not the venous system, and is not directly related to the formation of the SVC.
+
+B. Pharyngeal arch - The pharyngeal arches are structures that form during embryological development and give rise to various structures in the head and neck, including the cranial nerves and muscles of the face. They are not directly related to the formation of the SVC.
+
+C. Cardinal vein - The anterior cardinal veins are indeed the precursors to the superior vena cava. Therefore, option C is the correct answer.
+
+D. Vitelline vein - The vitelline veins are part of the venous system that drains blood from the yolk sac and are involved in the formation of the inferior vena cava, not the superior vena cava.
+
+The final answer is C.",C,0.8928920580817605,C,True
+19,Hyper viscosity is seen in,"['Cryoglobulinemia', 'Multiple myeloma', 'MGUS', 'Lymphoma']","To answer this question, let's analyze each option in relation to the condition of hyper viscosity, which refers to an abnormally high blood viscosity, or thickness, that can lead to various complications, including decreased blood flow and potentially organ damage.
+
+A. Cryoglobulinemia: This is a condition where abnormal proteins called cryoglobulins are present in the blood and can precipitate at low temperatures, leading to blood vessel inflammation and damage. Hyper viscosity can be a symptom of cryoglobulinemia due to the abnormal proteins causing the blood to thicken.
+
+B. Multiple myeloma: This is a type of blood cancer characterized by the proliferation of malignant plasma cells in the bone marrow. While multiple myeloma can lead to various complications, such as anemia, infections, and bone damage, it's less commonly directly associated with hyper viscosity, which is more typically seen in conditions where there is a significant increase in the concentration of large molecules or cells in the blood, such as in plasma cell dyscrasias.
+
+C. MGUS (Monoclonal Gammopathy of Undetermined Significance): MGUS is a condition where there's an abnormal protein (monoclonal protein or M-protein) present in the blood but without any signs of multiple myeloma or other plasma cell disorders. While MGUS is related to plasma cell dyscrasias and can involve monoclonal proteins, it is less likely to cause significant hyper viscosity compared to conditions like multiple myeloma or Waldenström's macroglobulinemia.
+
+D. Lymphoma: This is a type of cancer that begins in cells of the lymph system (part of the immune system). While lymphoma can lead to various systemic complications, including weight loss, fever, and fatigue, it is not commonly associated with hyper viscosity as a direct result of the disease process.
+
+Considering the options, cryoglobulinemia (A) is the condition most directly associated with hyper viscosity due to the presence of abnormal proteins that can cause the blood to thicken.
+
+The final answer is A.",A,0.9617091825688459,A,True
