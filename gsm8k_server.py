@@ -139,16 +139,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("model_name", choices=["llama", "qwen", "gemma"], help="Name of model to use")
     parser.add_argument("dataset_split", choices=["train", "test"], help="Dataset split to use")
-    parser.add_argument("exp_type", choices=["cot_exp", "zs"], help="Experiment type")
+    parser.add_argument("exp_type", choices=["cot_exp", "zs_exp"], help="Experiment type")
     args = parser.parse_args()
     dataset = load_dataset("openai/gsm8k", "main")
     dataset_split = args.dataset_split
-
+    BASE_DIR = f"{args.exp_type}/gsm8k"
 
     records = []
     start_idx = 0  # Starting from beginning of dataset
-    # end_idx = len(dataset[dataset_split])
-    end_idx = 10
+    end_idx = len(dataset[dataset_split])
     with ThreadPoolExecutor(max_workers=16) as executor:
         futures = []
         for idx in range(start_idx, end_idx):
@@ -160,8 +159,8 @@ if __name__ == "__main__":
                 records.append(result)
 
             if (len(records) > 0) and (len(records) % 50 == 0):
-                pd.DataFrame.from_records(records).to_csv(f"{args.exp_type}_records_{args.dataset_split}_partial_{args.model_name}.csv")
+                pd.DataFrame.from_records(records).to_csv(f"{BASE_DIR}/{args.exp_type}_records_{args.dataset_split}_partial_{args.model_name}.csv")
                 
 
     # Final save
-    pd.DataFrame.from_records(records).to_csv(f"{args.exp_type}_records_{args.dataset_split}_full_{args.model_name}.csv")
+    pd.DataFrame.from_records(records).to_csv(f"{BASE_DIR}/{args.exp_type}_records_{args.dataset_split}_full_{args.model_name}.csv")

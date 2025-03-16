@@ -10,7 +10,9 @@
 | **gpt 4o**                         |     ✅    |       ❌      |     ❌   |      ❌      |
 | **gpt 4o mini**                    |     ✅    |       ❌      |     ❌   |      ❌      |
 
+
 cot_exp = Chain of Thought Experiments
+
 zs_exp = Zero Shot Experiments
 
 ### Calibration Experiments conducted:
