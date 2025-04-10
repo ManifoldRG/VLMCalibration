@@ -4,9 +4,9 @@
 
 | **Model**                     | **gsm8k-zs** | **gsm8k-cot** | **mmlu-zs** | **mmlu-cot** | **medmcqa-zs** | **medmcqa-cot** | **simpleqa-zs** | **simpleqa-cot** |
 |:----------------------------------:|:---------:|:-------------:|:--------:|:------------:|:-------------:|:---------------:|:-------------:|:---------------:|
-| **Meta-Llama-3.1-8B-Instruct-Q8_0**|     ✅    |       ✅      |     ✅   |      ❌      |       ✅      |        ❌       |       ❌      |        ❌       |
-| **gemma-2-9b-it-Q8_0**             |     ✅    |       ✅      |     ✅   |      ❌      |       ✅      |        ❌       |       ❌      |        ❌       |
-| **Qwen2.5-7B-Instruct-Q8_0**       |     ✅    |       ✅      |     ✅   |      ❌      |       ✅      |        ❌       |       ❌      |        ❌       |
+| **Meta-Llama-3.1-8B-Instruct-Q8_0**|     ✅    |       ✅      |     ✅   |      ❌      |       ✅      |        ❌       |       ✅      |        ❌       |
+| **gemma-2-9b-it-Q8_0**             |     ✅    |       ✅      |     ✅   |      ❌      |       ✅      |        ❌       |       ✅      |        ❌       |
+| **Qwen2.5-7B-Instruct-Q8_0**       |     ✅    |       ✅      |     ✅   |      ❌      |       ✅      |        ❌       |       ✅      |        ❌       |
 | **gpt 4o**                         |     ✅    |       ❌      |     ❌   |      ❌      |       ❌      |        ❌       |       ❌      |        ❌       |
 | **gpt 4o mini**                    |     ✅    |       ❌      |     ❌   |      ❌      |       ❌      |        ❌       |       ❌      |        ❌       |
 
@@ -48,6 +48,18 @@ Command to run server (example):
 | `-ub` | Physical maximum batch size |
 | `-cb` | Enable continuous batching |
 | `--gpu-layers` | Number of layers to offload to GPU |
+
+### All model running commands:
+All must be run from directory of `llama-server` binary
+
+```bash
+./llama-server -m /opt/dlami/nvme/models/Meta-Llama-3.1-8B-Instruct-Q8_0.gguf -c 28672 -np 14 -t 10 -tb 10 -b 4096 -ub 2048 -cb --gpu-layers 300 # Llama
+
+./llama-server -m /opt/dlami/nvme/models/Qwen2.5-7B-Instruct-Q8_0.gguf -c 40960 -np 20 -t 10 -tb 10 -b 4096 -ub 2048 -cb --gpu-layers 300 # Qwen
+
+./llama-server -m /opt/dlami/nvme/models/gemma-2-9b-it-Q8_0.gguf -c 24576 -np 12 -t 10 -tb 10 -b 4096 -ub 2048 -cb --gpu-layers 300 # Gemma
+```
+
 
 
 ## Steps to setup llama.cpp C++ server
