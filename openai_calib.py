@@ -196,7 +196,7 @@ if __name__ == "__main__":
     start_idx = 0
     end_idx = len(dataset[dataset_split])
 
-    with ThreadPoolExecutor(max_workers=24) as executor:
+    with ThreadPoolExecutor(max_workers=32) as executor:
         futures = []
         for idx in range(start_idx, end_idx):
             futures.append(
