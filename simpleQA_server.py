@@ -56,7 +56,7 @@ def grade_answer(question: str, model_answer: str, true_answer: str) -> bool:
             max_tokens=1,
         )
         grade_letter = response.choices[0].message.content.strip()
-        print(f"Grade letter: {grade_letter}")
+        # print(f"Grade letter: {grade_letter}")
         is_correct = grade_letter == "A"
         is_incorrect = grade_letter == "B"
         is_not_attempted = grade_letter == "C"
@@ -98,6 +98,26 @@ Your response should end with "The answer is: [answer]" where [answer] is your c
 
         response_text = first_response["choices"][0]["message"]["content"]
         answer = parse_answer(response_text)
+        # print(f"FIRST RESPONSE: {response_text}")
+        # Add chain-of-thought injection for cot_exp
+        if args.exp_type == "cot_exp":
+            inject_cot_payload = {
+                "messages": [
+                    {"role": "system", "content": "You are a helpful question answering assistant."},
+                    {"role": "user", "content": question_str},
+                    {"role": "assistant", "content": response_text},
+                    {"role": "user", "content": "Before answering whether your above answer is correct, please provide a detailed chain-of-thought explanation of your reasoning. Explain step-by-step how you arrived at your answer and why you think it is correct or might be incorrect."},
+                ],
+                "temperature": 0.7,
+                "max_tokens": 1024,
+            }
+            inject_cot_response = send_request(inject_cot_payload)
+            if not inject_cot_response:
+                return None
+            inject_cot_text = inject_cot_response["choices"][0]["message"]["content"]
+            # print(f"COT RESPONSE: {inject_cot_text}")
+        else:
+            inject_cot_text = None
 
         # Second request for confidence check
         second_payload = {
@@ -105,14 +125,25 @@ Your response should end with "The answer is: [answer]" where [answer] is your c
                 {"role": "system", "content": "You are a helpful question answering assistant."},
                 {"role": "user", "content": question_str},
                 {"role": "assistant", "content": response_text},
-                {"role": "user", "content": "Is the above answer correct? Answer only with the single word 'true' or 'false'."},
             ],
             "temperature": 0.7,
             "max_tokens": 1,
             "n_probs": 25,
         }
 
+        # Add CoT messages if in cot_exp mode
+        if args.exp_type == "cot_exp":
+            second_payload["messages"].extend([
+                {"role": "user", "content": "Before answering whether your above answer is correct, please provide a detailed chain-of-thought explanation of your reasoning. Explain step-by-step how you arrived at your answer and why you think it is correct or might be incorrect."},
+                {"role": "assistant", "content": inject_cot_text},
+            ])
+
+        second_payload["messages"].append(
+            {"role": "user", "content": "Is the above answer correct? Answer only with the single word 'true' or 'false'."}
+        )
+
         second_response = send_request(second_payload)
+        # print(f"SECOND RESPONSE: {second_response['choices'][0]['message']['content']}")
         if not second_response:
             return None
 
@@ -140,8 +171,7 @@ Your response should end with "The answer is: [answer]" where [answer] is your c
         if is_correct == "NOT_ATTEMPTED" or is_correct is None:
             return None
         else:
-
-            return {
+            result = {
                 "question": question,
                 "response": response_text,
                 "answer": answer,
@@ -149,6 +179,9 @@ Your response should end with "The answer is: [answer]" where [answer] is your c
                 "true_answer": true_answer,
                 "correct": is_correct,
             }
+            if args.exp_type == "cot_exp":
+                result["inject_cot"] = inject_cot_text
+            return result
     except Exception as e:
         print(f"Error processing question {idx}: {e}")
         traceback.print_exc()
@@ -173,7 +206,7 @@ if __name__ == "__main__":
     start_idx = 0
     end_idx = len(dataset[dataset_split])
 
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    with ThreadPoolExecutor(max_workers=16) as executor:
         futures = []
         for idx in range(start_idx, end_idx):
             futures.append(executor.submit(process_single_question, dataset, dataset_split, idx))
