@@ -53,62 +53,14 @@ hist_path = os.path.join(OUTPUT_DIR, f'confidence_histogram_{args.dataset}_{args
 plt.savefig(hist_path)
 plt.close()
 
-# Plot calibration curve
-plt.figure(figsize=(6, 4))
-df_grouped = df.groupby(pd.qcut(df['p_true'], 10))['correct'].agg(['mean', 'count']).reset_index()
-df_grouped['p_true'] = df_grouped['p_true'].apply(lambda x: x.mid)
-
-plt.scatter(df_grouped['p_true'], df_grouped['mean'], s=df_grouped['count']/30,
-           alpha=0.6, label='Observed')
-plt.plot([0, 1], [0, 1], 'r--', label='Perfect Calibration')
-
-# Fit isotonic regression
-ir = IsotonicRegression(out_of_bounds='clip')
-ir.fit(df['p_true'], df['correct'])
-plt.plot(np.linspace(0, 1, 100), 
-         ir.predict(np.linspace(0, 1, 100)),
-         'g-', label='Isotonic Regression')
-
-plt.xlabel('Confidence (p_true)')
-plt.ylabel('Empirical Accuracy')
-plt.title(f'Calibration Curve for {args.dataset} ({args.model_name})')
-plt.legend()
-plt.grid(True)
-
-# Save calibration curve
-calib_path = os.path.join(OUTPUT_DIR, f'calibration_curve_{args.dataset}_{args.model_name}.png')
-plt.savefig(calib_path)
-plt.close()
-
-# Plot ROC curve
-fpr, tpr, _ = roc_curve(df['correct'], df['p_true'])
-roc_auc = auc(fpr, tpr)
-
-plt.figure(figsize=(6, 4))
-plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
-plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title(f'ROC Curve for {args.dataset} ({args.model_name})')
-plt.legend(loc="lower right")
-plt.grid(True)
-
-# Save ROC curve
-roc_path = os.path.join(OUTPUT_DIR, f'roc_curve_{args.dataset}_{args.model_name}.png')
-plt.savefig(roc_path)
-plt.close()
-
 # Print summary statistics
 print("\nSummary Statistics:")
 print(f"Total samples: {len(df)}")
 print(f"Accuracy: {df['correct'].mean():.3f}")
-print(f"ROC AUC: {roc_auc:.3f}")
 
 # Calculate and print calibration metrics
 expected_accuracy = df['p_true'].mean()
 actual_accuracy = df['correct'].mean()
 print(f"Expected accuracy (mean confidence): {expected_accuracy:.3f}")
 print(f"Actual accuracy: {actual_accuracy:.3f}")
-print(f"Calibration error: {abs(expected_accuracy - actual_accuracy):.3f}") 
+print(f"Calibration error: {abs(expected_accuracy - actual_accuracy):.3f}")
