@@ -1,14 +1,14 @@
 # VLMCalibration
 
-## Experiment Tracking
+## Experiment Tracking for Calibration
 
 | **Model**                     | **gsm8k-zs** | **gsm8k-cot** | **mmlu-zs** | **mmlu-cot** | **medmcqa-zs** | **medmcqa-cot** | **simpleqa-zs** | **simpleqa-cot** |
 |:----------------------------------:|:---------:|:-------------:|:--------:|:------------:|:-------------:|:---------------:|:-------------:|:---------------:|
-| **Meta-Llama-3.1-8B-Instruct-Q8_0**|     ✅    |       ✅      |     ✅   |      ❌      |       ✅      |        ❌       |       ✅      |        ❌       |
-| **gemma-2-9b-it-Q8_0**             |     ✅    |       ✅      |     ✅   |      ❌      |       ✅      |        ❌       |       ✅      |        ❌       |
-| **Qwen2.5-7B-Instruct-Q8_0**       |     ✅    |       ✅      |     ✅   |      ❌      |       ✅      |        ❌       |       ✅      |        ❌       |
-| **gpt 4o**                         |     ✅    |       ❌      |     ❌   |      ❌      |       ❌      |        ❌       |       ❌      |        ❌       |
-| **gpt 4o mini**                    |     ✅    |       ❌      |     ❌   |      ❌      |       ❌      |        ❌       |       ❌      |        ❌       |
+| **Meta-Llama-3.1-8B-Instruct-Q8_0**|     ✅    |       ✅      |     ❌   |      ❌      |       ✅      |        ❌       |       ✅      |        ✅       |
+| **gemma-2-9b-it-Q8_0**             |     ✅    |       ✅      |     ❌   |      ❌      |       ✅      |        ❌       |       ✅      |        ❌       |
+| **Qwen2.5-7B-Instruct-Q8_0**       |     ✅    |       ✅      |     ❌   |      ❌      |       ✅      |        ❌       |       ✅      |        ✅       |
+| **gpt 4o**                         |     ❌    |       ❌      |     ❌   |      ❌      |       ❌      |        ❌       |       ❌      |        ❌       |
+| **gpt 4o mini**                    |     ✅    |       ✅      |     ❌   |      ❌      |       ❌      |        ❌       |       ❌      |        ❌       |
 
 
 cot_exp = Chain of Thought Experiments
