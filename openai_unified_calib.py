@@ -348,6 +348,9 @@ if __name__ == "__main__":
         indices = [int(i) for i in np.random.choice(len(dataset[dataset_split]), end_idx, replace=False)]
         start_idx = 0
 
+    FINAL_FILE_NAME = f"{BASE_DIR}/{args.exp_type}_records_{args.dataset_split}_full_{args.model_name}.csv"
+    assert not os.path.exists(FINAL_FILE_NAME), "Final file already exists - You should delete it before running the experiment"
+
     with ThreadPoolExecutor(max_workers=40) as executor:
         futures = []
         if args.dataset_name == "medmcqa" and args.dataset_split == "train":
@@ -369,9 +372,7 @@ if __name__ == "__main__":
 
     # Final save
     final_df = pd.DataFrame.from_records(records)
-    final_df.to_csv(
-        f"{BASE_DIR}/{args.exp_type}_records_{args.dataset_split}_full_{args.model_name}.csv"
-    )
+    final_df.to_csv(FINAL_FILE_NAME)
 
     # Delete the partial results file after final save
     partial_file = f"{BASE_DIR}/{args.exp_type}_records_{args.dataset_split}_partial_{args.model_name}.csv"
