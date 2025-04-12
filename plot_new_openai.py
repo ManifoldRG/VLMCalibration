@@ -9,10 +9,14 @@ import argparse
 # Add argument parsing to match the server script
 parser = argparse.ArgumentParser()
 parser.add_argument("model_name", choices=["gpt-4o", "gpt-4o-mini"], help="Name of OpenAI model to use")
-parser.add_argument("exp_type", choices=["cot_exp", "zs_exp"], help="Experiment type")
-parser.add_argument("dataset", choices=["gsm8k"], help="Dataset to analyze")  # Currently only GSM8K supported
+parser.add_argument("dataset", choices=["gsm8k", "mmlu", "medmcqa", "simpleqa"], help="Dataset to analyze")  # Currently only GSM8K supported
 parser.add_argument("dataset_split", choices=["train", "test"], help="Dataset split to analyze")
+parser.add_argument("exp_type", choices=["cot_exp", "zs_exp"], help="Experiment type")
+parser.add_argument("plot_type", choices=["raw", "density"], help="Plot type", default="density")
+
 args = parser.parse_args()
+
+density_true = args.plot_type == "density"
 
 # Set up paths based on args
 BASE_DIR = f"{args.exp_type}/{args.dataset}"
@@ -37,9 +41,9 @@ print("Mean confidence (p_true) when incorrect:", mean_conf_incorrect)
 # Plot confidence histograms
 plt.figure(figsize=(6, 4))
 bins = np.linspace(0, 1, 51)
-plt.hist(df[df['correct'] == True]['p_true'], bins=bins, alpha=0.5, density=True,
+plt.hist(df[df['correct'] == True]['p_true'], bins=bins, alpha=0.5, density=density_true,
          label="Confidence when Correct", edgecolor='black')
-plt.hist(df[df['correct'] == False]['p_true'], bins=bins, alpha=0.5, density=True,
+plt.hist(df[df['correct'] == False]['p_true'], bins=bins, alpha=0.5, density=density_true,
          label="Confidence when Incorrect", edgecolor='black')
 plt.xlabel('Confidence (p_true)')
 plt.ylabel('Density')
@@ -49,7 +53,10 @@ plt.legend()
 plt.grid(True)
 
 # Save confidence histogram
-hist_path = os.path.join(OUTPUT_DIR, f'confidence_histogram_{args.dataset}_{args.model_name}.png')
+if density_true:
+    hist_path = os.path.join(OUTPUT_DIR, f'confidence_histogram_{args.dataset}_{args.model_name}.png')
+else:
+    hist_path = os.path.join(OUTPUT_DIR, f'confidence_histogram_{args.dataset}_{args.model_name}_RAW.png')
 plt.savefig(hist_path)
 plt.close()
 

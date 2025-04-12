@@ -9,10 +9,13 @@ import argparse
 # Add argument parsing to match the server script
 parser = argparse.ArgumentParser()
 parser.add_argument("model_name", choices=["llama", "qwen", "gemma"], help="Name of model to use")
-parser.add_argument("exp_type", choices=["cot_exp", "zs_exp"], help="Experiment type")
 parser.add_argument("dataset", choices=["simpleqa", "gsm8k", "mmlu", "medmcqa"], help="Dataset to analyze")
 parser.add_argument("dataset_split", choices=["train", "val", "test"], help="Dataset split to analyze")
+parser.add_argument("exp_type", choices=["cot_exp", "zs_exp"], help="Experiment type")
+parser.add_argument("plot_type", choices=["raw", "density"], help="Plot type", default="density")
 args = parser.parse_args()
+
+density_true = args.plot_type == "density"
 
 # Set up paths based on args
 BASE_DIR = f"{args.exp_type}/{args.dataset}"
@@ -37,9 +40,9 @@ print("Mean confidence (p_true) when incorrect:", mean_conf_incorrect)
 # Plot confidence histograms
 plt.figure(figsize=(6, 4))
 bins = np.linspace(0, 1, 51)
-plt.hist(train_df[train_df['correct'] == True]['p_true'], bins=bins, alpha=0.5, density=True,
+plt.hist(train_df[train_df['correct'] == True]['p_true'], bins=bins, alpha=0.5, density=density_true,
          label="Confidence when Correct", edgecolor='black')
-plt.hist(train_df[train_df['correct'] == False]['p_true'], bins=bins, alpha=0.5, density=True,
+plt.hist(train_df[train_df['correct'] == False]['p_true'], bins=bins, alpha=0.5, density=density_true,
          label="Confidence when Incorrect", edgecolor='black')
 plt.xlabel('Confidence (p_true)')
 plt.ylabel('Density')
@@ -48,7 +51,9 @@ plt.xlim(0, 1)
 plt.legend()
 plt.grid(True)
 
-# Save plot with appropriate naming
-plot_path = os.path.join(OUTPUT_DIR, f'confidence_histogram_{args.dataset}_{args.model_name}.png')
+if density_true:
+    plot_path = os.path.join(OUTPUT_DIR, f'confidence_histogram_{args.dataset}_{args.model_name}.png')
+else:
+    plot_path = os.path.join(OUTPUT_DIR, f'confidence_histogram_{args.dataset}_{args.model_name}_RAW.png')
 plt.savefig(plot_path)
 plt.close()
