@@ -318,6 +318,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    assert not (args.dataset_name == "medmcqa" and args.dataset_split == "test"), "MedMCQA test split does not contain answers - cannot calibrate now"
     # Load appropriate dataset
     if args.dataset_name == "gsm8k":
         dataset = load_dataset("openai/gsm8k", "main")
@@ -354,13 +355,7 @@ if __name__ == "__main__":
             for idx in range(start_idx, end_idx):
                 futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split, args.model_name))
 
-        for idx, future in enumerate(
-            tqdm(
-                as_completed(futures),
-                total=end_idx - start_idx,
-                desc="Processing dataset",
-            )
-        ):
+        for idx, future in enumerate(tqdm(as_completed(futures), total=end_idx - start_idx, desc="Processing dataset")):
             result = future.result()
             if result:
                 records.append(result)
