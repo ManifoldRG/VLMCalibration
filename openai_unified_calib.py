@@ -121,9 +121,9 @@ def validate_simpleqa_answer(question: str, model_answer: str, true_answer: str)
 
 def send_request(
     messages: list,
+    model: str,
     temperature: float = 0.7,
     max_tokens: int = 1024,
-    model: str = "gpt-4o",
     logprobs: bool = False,
     top_logprobs: int = None,
 ) -> dict:
@@ -140,7 +140,9 @@ def send_request(
     except Exception as e:
         print(f"Request error: {e}")
         return None
-def process_single_question(idx: int, dataset_type: str, dataset, dataset_split: str, model: str = "gpt-4o"):
+    
+
+def process_single_question(idx: int, dataset_type: str, dataset, dataset_split: str, model: str):
     try:
         # Get question and format it based on dataset type
         if dataset_type == "simpleqa":
@@ -346,14 +348,14 @@ if __name__ == "__main__":
         indices = [int(i) for i in np.random.choice(len(dataset[dataset_split]), end_idx, replace=False)]
         start_idx = 0
 
-    with ThreadPoolExecutor(max_workers=32) as executor:
+    with ThreadPoolExecutor(max_workers=40) as executor:
         futures = []
         if args.dataset_name == "medmcqa" and args.dataset_split == "train":
             for idx in indices:
-                futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split))
+                futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split, args.model_name))
         else:
             for idx in range(start_idx, end_idx):
-                futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split))
+                futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split, args.model_name))
 
         for idx, future in enumerate(tqdm(as_completed(futures), total=end_idx - start_idx, desc="Processing dataset")):
             result = future.result()
