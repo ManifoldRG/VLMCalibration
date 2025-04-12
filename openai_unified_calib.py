@@ -18,6 +18,7 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+
 # Dataset-specific question formatters
 def format_gsm8k_question(question: str) -> str:
     return f'Given the following problem, reason and give a final answer to the problem.\nProblem: {question}\nYour response should end with "The final answer is [answer]" where [answer] is the response to the problem.'
@@ -158,7 +159,7 @@ def process_single_question(idx: int, dataset_type: str, dataset, dataset_split:
                 dataset[dataset_split][idx]["opa"],
                 dataset[dataset_split][idx]["opb"],
                 dataset[dataset_split][idx]["opc"],
-                dataset[dataset_split][idx]["opd"]
+                dataset[dataset_split][idx]["opd"],
             ]
             question_str = format_medmcqa_question(question, choices_list)
         elif dataset_type == "simpleqa":
@@ -177,7 +178,7 @@ def process_single_question(idx: int, dataset_type: str, dataset, dataset_split:
             return None
 
         response_text = first_response.choices[0].message.content
-        
+
         # Parse answer based on dataset type
         if dataset_type == "gsm8k":
             answer = parse_gsm8k_answer(response_text)
@@ -290,6 +291,7 @@ def process_single_question(idx: int, dataset_type: str, dataset, dataset_split:
         traceback.print_exc()
         return None
 
+
 if __name__ == "__main__":
     import argparse
 
@@ -328,7 +330,7 @@ if __name__ == "__main__":
 
     dataset_split = args.dataset_split
     print(f"Dataset: {args.dataset_name}, Split: {dataset_split}")
-    
+
     BASE_DIR = f"{args.exp_type}/{args.dataset_name}"
     os.makedirs(BASE_DIR, exist_ok=True)
     print(f"Base directory: {BASE_DIR}")
@@ -337,12 +339,20 @@ if __name__ == "__main__":
     start_idx = 0
     end_idx = len(dataset[dataset_split])
 
+    if args.dataset_name == "medmcqa" and args.dataset_split == "train":
+        np.random.seed(42)
+        end_idx = min(5000, len(dataset[dataset_split]))
+        indices = np.random.choice(len(dataset[dataset_split]), end_idx, replace=False)
+        start_idx = 0
+
     with ThreadPoolExecutor(max_workers=32) as executor:
         futures = []
-        for idx in range(start_idx, end_idx):
-            futures.append(
-                executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split, args.model_name)
-            )
+        if args.dataset_name == "medmcqa" and args.dataset_split == "train":
+            for idx in indices:
+                futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split, args.model_name))
+        else:
+            for idx in range(start_idx, end_idx):
+                futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split, args.model_name))
 
         for idx, future in enumerate(
             tqdm(
@@ -369,4 +379,4 @@ if __name__ == "__main__":
     # Delete the partial results file after final save
     partial_file = f"{BASE_DIR}/{args.exp_type}_records_{args.dataset_split}_partial_{args.model_name}.csv"
     if os.path.exists(partial_file):
-        os.remove(partial_file) 
+        os.remove(partial_file)
