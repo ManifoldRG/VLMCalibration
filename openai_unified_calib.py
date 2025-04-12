@@ -278,7 +278,7 @@ def process_single_question(idx: int, dataset_type: str, dataset, dataset_split:
             is_correct = validate_simpleqa_answer(question, answer, true_answer)
 
         result = {
-            "question": question,
+            "question": question_str,
             "response": response_text,
             "answer": answer,
             "p_true": p_true,
@@ -331,6 +331,9 @@ if __name__ == "__main__":
     elif args.dataset_name == "simpleqa":
         dataset = load_dataset("basicv8vc/SimpleQA")
 
+    if args.dataset_split not in dataset:
+        raise ValueError(f"Dataset split {args.dataset_split} not found in dataset {args.dataset_name}")
+
     dataset_split = args.dataset_split
     print(f"Dataset: {args.dataset_name}, Split: {dataset_split}")
 
@@ -342,7 +345,7 @@ if __name__ == "__main__":
     start_idx = 0
     end_idx = len(dataset[dataset_split])
 
-    if args.dataset_name == "medmcqa" and args.dataset_split == "train":
+    if (args.dataset_name == "medmcqa" and args.dataset_split == "train") or (args.dataset_name == "mmlu" and args.dataset_split == "test"):
         np.random.seed(42)
         end_idx = min(5000, len(dataset[dataset_split]))
         indices = [int(i) for i in np.random.choice(len(dataset[dataset_split]), end_idx, replace=False)]
@@ -353,7 +356,7 @@ if __name__ == "__main__":
 
     with ThreadPoolExecutor(max_workers=40) as executor:
         futures = []
-        if args.dataset_name == "medmcqa" and args.dataset_split == "train":
+        if (args.dataset_name == "medmcqa" and args.dataset_split == "train") or (args.dataset_name == "mmlu" and args.dataset_split == "test"):
             for idx in indices:
                 futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split, args.model_name))
         else:
