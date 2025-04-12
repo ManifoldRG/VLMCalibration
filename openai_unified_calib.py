@@ -343,17 +343,17 @@ if __name__ == "__main__":
     if args.dataset_name == "medmcqa" and args.dataset_split == "train":
         np.random.seed(42)
         end_idx = min(5000, len(dataset[dataset_split]))
-        indices = np.random.choice(len(dataset[dataset_split]), end_idx, replace=False)
+        indices = [int(i) for i in np.random.choice(len(dataset[dataset_split]), end_idx, replace=False)]
         start_idx = 0
 
     with ThreadPoolExecutor(max_workers=32) as executor:
         futures = []
         if args.dataset_name == "medmcqa" and args.dataset_split == "train":
             for idx in indices:
-                futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split, args.model_name))
+                futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split))
         else:
             for idx in range(start_idx, end_idx):
-                futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split, args.model_name))
+                futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split))
 
         for idx, future in enumerate(tqdm(as_completed(futures), total=end_idx - start_idx, desc="Processing dataset")):
             result = future.result()

@@ -347,15 +347,23 @@ if __name__ == "__main__":
     start_idx = 0
     end_idx = len(dataset[dataset_split])
 
+    if args.dataset_name == "medmcqa" and args.dataset_split == "train":
+        np.random.seed(42)
+        end_idx = min(5000, len(dataset[dataset_split]))
+        indices = [int(i) for i in np.random.choice(len(dataset[dataset_split]), end_idx, replace=False)]
+        start_idx = 0
+
     FINAL_FILE_NAME = f"{BASE_DIR}/{args.exp_type}_records_{args.dataset_split}_full_{args.model_name}.csv"
     assert not os.path.exists(FINAL_FILE_NAME), "Final file already exists - You should delete it before running the experiment"
 
     with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
         futures = []
-        for idx in range(start_idx, end_idx):
-            futures.append(
-                executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split)
-            )
+        if args.dataset_name == "medmcqa" and args.dataset_split == "train":
+            for idx in indices:
+                futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split))
+        else:
+            for idx in range(start_idx, end_idx):
+                futures.append(executor.submit(process_single_question, idx, args.dataset_name, dataset, dataset_split))
 
         for idx, future in enumerate(tqdm(as_completed(futures), total=end_idx - start_idx, desc="Processing dataset")):
             result = future.result()
@@ -363,16 +371,13 @@ if __name__ == "__main__":
                 records.append(result)
 
             if (len(records) > 0) and (len(records) % 50 == 0):
-                
                 pd.DataFrame.from_records(records).to_csv(
                     f"{BASE_DIR}/{args.exp_type}_records_{args.dataset_split}_partial_{args.model_name}.csv"
                 )
 
     # Final save
     final_df = pd.DataFrame.from_records(records)
-    final_df.to_csv(
-        FINAL_FILE_NAME
-    )
+    final_df.to_csv(FINAL_FILE_NAME)
 
     # Delete the partial results file after final save
     partial_file = f"{BASE_DIR}/{args.exp_type}_records_{args.dataset_split}_partial_{args.model_name}.csv"
