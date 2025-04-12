@@ -139,11 +139,13 @@ def send_request(
     except Exception as e:
         print(f"Request error: {e}")
         return None
-
 def process_single_question(idx: int, dataset_type: str, dataset, dataset_split: str, model: str = "gpt-4o"):
     try:
         # Get question and format it based on dataset type
-        question = dataset[dataset_split][idx]["question"]
+        if dataset_type == "simpleqa":
+            question = dataset[dataset_split][idx]["problem"]
+        else:
+            question = dataset[dataset_split][idx]["question"]
         
         if dataset_type == "gsm8k":
             question_str = format_gsm8k_question(question)
