@@ -37,8 +37,27 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Server configuration
-url = "http://localhost:8080/v1/chat/completions"
+url = "http://localhost:8000/v1/chat/completions"
 headers = {"Content-Type": "application/json"}
+
+TRUE_SYNS = [
+    "true",
+    "correct",
+    "truth",
+    "yes",
+    "right",
+    "verdade",
+]
+
+FALSE_SYNS = [
+    "false",
+    "incorrect",
+    "wrong",
+    "fake",
+    "no",
+    "not",
+    "none",
+]
 
 def send_request(payload):
     try:
@@ -186,14 +205,10 @@ def generate_responses(questions, exp_type, max_workers):
             
             for item in logprobs:
                 token = item["token"].lower()
-                if any(key in token for key in ["true", "false", "correct", "incorrect", "wrong",
-                                            "truth", "yes", "right", "verdade",  # True variations
-                                            "fake", "no", "not", "none"]):      # False variations
-                    if ("true" in token or "correct" in token or "truth" in token or 
-                        "yes" in token or "right" in token or "verdade" in token):
+                if any(key in token for key in TRUE_SYNS + FALSE_SYNS):
+                    if any(key in token for key in TRUE_SYNS):
                         actual_key = "true"
-                    elif ("false" in token or "incorrect" in token or "wrong" in token or 
-                        "fake" in token or "no" in token or "not" in token or "none" in token):
+                    elif any(key in token for key in FALSE_SYNS):
                         actual_key = "false"
                     probs[actual_key] += np.exp(item["logprob"])
 
@@ -323,7 +338,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Load appropriate dataset
-    assert not (args.dataset_name == "medmcqa" and args.dataset_split == "test"), "MedMCQA test split does not contain answers - cannot calibrate now"
+    assert not (args.dataset_name == "medmcqa" and args.dataset_split == "test"), "MedMCQA test split does not contain answers - cannot calibrate now, use validation"
 
     
     if args.dataset_name == "gsm8k":
@@ -341,7 +356,7 @@ if __name__ == "__main__":
     dataset_split = args.dataset_split
     print(f"Dataset: {args.dataset_name}, Split: {dataset_split}")
     
-    BASE_DIR = f"{args.exp_type}/{args.dataset_name}"
+    BASE_DIR = f"newww/{args.exp_type}/{args.dataset_name}"
     os.makedirs(BASE_DIR, exist_ok=True)
     print(f"Base directory: {BASE_DIR}")
 

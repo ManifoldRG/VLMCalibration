@@ -29,13 +29,7 @@ from answer_validators import (
     validate_simpleqa_answer
 )
 
-# vLLM
 from vllm import LLM, SamplingParams
-
-
-# ---------------------------------------------------------------------------
-# Environment
-# ---------------------------------------------------------------------------
 
 load_dotenv()
 
@@ -44,10 +38,6 @@ openai_client: Optional[OpenAI] = None
 if OPENAI_API_KEY:
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-
-# ---------------------------------------------------------------------------
-# p_true extraction helper (same logic as local script)
-# ---------------------------------------------------------------------------
 
 
 TRUE_SYNS = [
