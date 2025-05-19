@@ -10,6 +10,24 @@ from datasets import load_dataset
 from dotenv import load_dotenv
 from openai import OpenAI
 from tqdm.auto import tqdm
+from prompt_templates import (
+    format_gsm8k_question,
+    format_mmlu_question,
+    format_medmcqa_question,
+    format_simpleqa_question
+)
+from answer_parsers import (
+    parse_gsm8k_answer,
+    parse_mmlu_answer,
+    parse_medmcqa_answer,
+    parse_simpleqa_answer
+)
+from answer_validators import (
+    validate_gsm8k_answer,
+    validate_mmlu_answer,
+    validate_medmcqa_answer,
+    validate_simpleqa_answer
+)
 
 # vLLM
 from vllm import LLM, SamplingParams
@@ -25,135 +43,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 openai_client: Optional[OpenAI] = None
 if OPENAI_API_KEY:
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
-
-
-# ---------------------------------------------------------------------------
-# Prompt formatters – identical to local_unified_calib
-# ---------------------------------------------------------------------------
-
-
-def format_gsm8k_question(question: str) -> str:
-    return (
-        "Given the following problem, reason and give a final answer to the problem.\n"
-        f"Problem: {question}\n"
-        'Your response should end with "The final answer is [answer]" where [answer] is the response to the problem.'
-    )
-
-
-def format_mmlu_question(question: str, choices_list: list[str], subject: str) -> str:
-    formatted_choices = "\n".join(
-        [f"{chr(65 + i)}: {choice}" for i, choice in enumerate(choices_list)]
-    )
-    return (
-        f"The following is a multiple choice question (with choices) about {subject}.\n"
-        "Reason and give a final answer to the question. Your response should end with 'The final answer is [answer]' where [answer] is solely the letter corresponding to the correct choice.\n"
-        f"Question: {question}\n"
-        f"Choices:\n{formatted_choices}"
-    )
-
-
-def format_medmcqa_question(question: str, choices_list: list[str]) -> str:
-    formatted_choices = "\n".join(
-        [f"{chr(65 + i)}: {choice}" for i, choice in enumerate(choices_list)]
-    )
-    return (
-        "Given the following medical question and options, reason and select the correct answer letter (A-D).\n"
-        f"Question: {question}\n"
-        f"Options:\n{formatted_choices}\n"
-        "Your response should end with 'The final answer is [letter]' where [letter] is A, B, C or D."
-    )
-
-
-def format_simpleqa_question(question: str) -> str:
-    return (
-        "Given the following question, provide a clear and concise answer.\n"
-        f"Question: {question}\n\n"
-        'Your response should end with "The answer is: [answer]" where [answer] is your complete answer.'
-    )
-
-
-# ---------------------------------------------------------------------------
-# Answer parsers – identical to local_unified_calib
-# ---------------------------------------------------------------------------
-
-
-def parse_gsm8k_answer(output: str) -> Optional[int]:
-    final_answer_match = re.search(r"The final answer is \$?(\d+,?\d*)", output)
-    if final_answer_match:
-        return int(final_answer_match.group(1).replace(",", ""))
-    matches = re.findall(r"\$?(\d+,?\d*)", output)
-    return int(matches[-1].replace(",", "")) if matches else None
-
-
-def parse_mmlu_answer(output: str) -> Optional[str]:
-    match = re.search(r"The final answer is ([A-D])", output)
-    return match.group(1) if match else None
-
-
-def parse_medmcqa_answer(output: str) -> Optional[str]:
-    match = re.search(r"The final answer is ([A-D])", output)
-    return match.group(1) if match else None
-
-
-def parse_simpleqa_answer(output: str) -> str:
-    answer_match = re.search(
-        r"The answer is: (.*?)(?:\.|$)", output, re.IGNORECASE | re.MULTILINE
-    )
-    return answer_match.group(1).strip() if answer_match else output.strip()
-
-
-# ---------------------------------------------------------------------------
-# Answer validators – identical to local_unified_calib
-# ---------------------------------------------------------------------------
-
-
-def validate_gsm8k_answer(answer: Optional[int], true_answer: int) -> Optional[bool]:
-    if answer is None:
-        return None
-    return abs(answer - true_answer) < 1e-4
-
-
-def validate_mmlu_answer(answer: Optional[str], true_answer: str) -> Optional[bool]:
-    return None if answer is None else answer == true_answer
-
-
-def validate_medmcqa_answer(answer: Optional[str], true_answer: str) -> Optional[bool]:
-    return None if answer is None else answer == true_answer
-
-
-def validate_simpleqa_answer(question: str, model_answer: str, true_answer: str) -> Optional[bool]:
-    """Grade SimpleQA answers with GPT-4-o."""
-
-    if openai_client is None:
-        return None
-
-    from simpleQA_grader_template import GRADER_TEMPLATE
-
-    grading_prompt = GRADER_TEMPLATE.format(
-        question=question, target=true_answer, predicted_answer=model_answer
-    )
-
-    try:
-        resp = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a helpful grading assistant."},
-                {"role": "user", "content": grading_prompt},
-            ],
-            temperature=0.7,
-            max_tokens=1,
-        )
-        letter = resp.choices[0].message.content.strip()
-        if letter == "A":
-            return True
-        if letter == "B":
-            return False
-        if letter == "C":
-            return "NOT_ATTEMPTED"  # type: ignore[return-value]
-    except Exception as exc:
-        print(f"Grading error: {exc}")
-
-    return None
 
 
 # ---------------------------------------------------------------------------
