@@ -31,6 +31,10 @@ def send_request(payload, url=None):
         response = requests.post(url, headers=headers, data=json.dumps(payload))
         response.raise_for_status()
         return response.json()
+    except requests.exceptions.ConnectionError as e:
+        print(f"Request error: {e}")
+        print("Connection error occurred. Continuing with available results.")
+        exit(1)
     except Exception as e:
         print(f"Request error: {e}")
         return None
@@ -466,13 +470,13 @@ if __name__ == "__main__":
     
     # Get confidence scores for all responses
     print("Getting confidence scores from LLM...")
-    tasks = process_batch(tasks=tasks, process_fn=get_confidence_score, desc="Getting confidence scores", max_workers=50)
+    tasks = process_batch(tasks=tasks, process_fn=get_confidence_score, desc="Getting confidence scores", max_workers=args.workers)
     
     # Finalize results by parsing answers and validating
     print("Finalizing results...")
-    records = process_batch(tasks=tasks, process_fn=finalize_result, desc="Finalizing results", max_workers=args.workers)
+    records = process_batch(tasks=tasks, process_fn=finalize_result, desc="Finalizing results", max_workers=40)
 
-    # Save results as JSON instead of CSV
+    # Save results as JSON
     with open(FINAL_FILE_NAME, 'w') as f:
         json.dump(records, f, indent=2)
     
