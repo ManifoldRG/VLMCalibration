@@ -259,13 +259,7 @@ def get_confidence_score(task):
         question_str = task["question_str"]
         response_text = task["response_text"]
         exp_type = task["exp_type"]
-
-        # Get the actual model name from the API
-        base_url = url.rsplit("/v1", 1)[0] + "/v1"
-        model_name = get_model_info(base_url)
-        if not model_name:
-            print("Could not get model name from API")
-            return None
+        model_name = task["model_name"]
 
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
@@ -457,7 +451,7 @@ def save_experiment_details(args, safe_model_name, base_dir, model_name, model_i
     if model_info:
         experiment_details["model_info"] = model_info
 
-    details_file = f"{base_dir}/experiment_details_{safe_model_name}.json"
+    details_file = f"{base_dir}/experiment_details_{args.dataset}_{args.split}_{args.exp}_{safe_model_name}.json"
     with open(details_file, "w") as f:
         json.dump(experiment_details, f, indent=2)
 
@@ -607,6 +601,7 @@ if __name__ == "__main__":
             "url": url,
             "temp": args.temp,
             "max_tokens": args.max_tokens,
+            "model_name": model_name,
         }
         if args.dataset == "simpleqa":
             task["client"] = openai_client

@@ -337,7 +337,7 @@ def save_experiment_details(args, safe_model_name, base_dir, model_name, model_i
     if model_info:
         experiment_details["model_info"] = model_info
     
-    details_file = f"{base_dir}/experiment_details_{safe_model_name}.json"
+    details_file = f"{base_dir}/experiment_details_{args.dataset}_{args.split}_{args.exp}_{safe_model_name}.json"
     with open(details_file, 'w') as f:
         json.dump(experiment_details, f, indent=2)
     
