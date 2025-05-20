@@ -342,16 +342,16 @@ def save_experiment_details(args, safe_model_name, base_dir, model_name, model_i
 if __name__ == "__main__":
     import argparse
     '''
-    python local_unified_calib.py --dataset gsm8k --split train --exp cot_exp
+    python local_unified_calib.py --dataset gsm8k --split test --exp cot_exp
     '''
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", choices=["gsm8k", "mmlu", "medmcqa", "simpleqa"], help="Dataset to use")
-    parser.add_argument("--split", choices=["train", "test", "validation"], help="Dataset split to use")
-    parser.add_argument("--exp", choices=["cot_exp", "zs_exp", "few_shot"], help="Experiment type")
-    parser.add_argument("--workers", type=int, default=None, help="Maximum number of workers to use")
+    parser.add_argument("--dataset", choices=["gsm8k", "mmlu", "medmcqa", "simpleqa"], help="Dataset to use", required=True)
+    parser.add_argument("--split", choices=["train", "test", "validation"], help="Dataset split to use", required=True)
+    parser.add_argument("--exp", choices=["cot_exp", "zs_exp", "few_shot"], help="Experiment type", required=True)
     parser.add_argument("--port", type=int, default=8080, help="Port to use for local model")
     parser.add_argument("--temp", type=float, default=0.1, help="Temperature to use for local model")
     parser.add_argument("--max_tokens", type=int, default=1024, help="Maximum tokens to use for local model")
+    parser.add_argument("--workers", type=int, default=None, help="Maximum number of workers to use")
 
     args = parser.parse_args()
 
@@ -420,7 +420,6 @@ if __name__ == "__main__":
     # Initialize indices for the data
     start_idx = 0
     end_idx = len(dataset[dataset_split])
-    # end_idx = 1000
 
     if end_idx > 5000:
         print("Sampling 5000 questions from dataset as it is very large")
