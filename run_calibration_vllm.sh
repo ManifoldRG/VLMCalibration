@@ -17,7 +17,7 @@ for dataset in "${datasets[@]}"; do
       echo "============================================"
       
       # Run the vLLM Python script with the current combination
-      python local_unified_calib_vllm.py --dataset $dataset --split $split --exp $exp --port 8000 --workers 24
+      python local_unified_calib_vllm.py --dataset $dataset --split $split --exp $exp --port 8000 --workers 32
       
       echo "Completed: $dataset - $split - $exp"
       echo "============================================"
