@@ -4,7 +4,7 @@ Dataset-specific question formatters, parsers and validators
 import re
 from simpleQA_grader_template import GRADER_TEMPLATE
 from openai import OpenAI
-
+import time
 
 def format_gsm8k_question(question: str) -> str:
     return f'Given the following problem, reason and give a final answer to the problem.\nProblem: {question}\nYour response should end with "The final answer is [answer]" where [answer] is the response to the problem.'
@@ -74,7 +74,6 @@ def validate_medmcqa_answer(answer: str, true_answer: str) -> bool:
     if answer is None:
         return None
     return answer == true_answer
-
 def validate_simpleqa_answer(question: str, model_answer: str, true_answer: str, client=None) -> bool:
     """Use GPT-4 to grade the answer by comparing model's answer with true answer"""
 
@@ -83,28 +82,37 @@ def validate_simpleqa_answer(question: str, model_answer: str, true_answer: str,
 
     grading_prompt = GRADER_TEMPLATE.format(question=question, target=true_answer, predicted_answer=model_answer)
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a helpful grading assistant."},
-                {"role": "user", "content": grading_prompt}
-            ],
-            temperature=0.1,
-            max_tokens=1,
-        )
-        grade_letter = response.choices[0].message.content.strip()
-        is_correct = grade_letter == "A"
-        is_incorrect = grade_letter == "B"
-        is_not_attempted = grade_letter == "C"
-        
-        if is_correct:
-            return True
-        elif is_incorrect:
-            return False
-        elif is_not_attempted:
-            return "NOT_ATTEMPTED"
+    retries = 5
+    delay = 1  # Initial delay in seconds
+    
+    for attempt in range(retries):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are a helpful grading assistant."},
+                    {"role": "user", "content": grading_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=1,
+            )
+            grade_letter = response.choices[0].message.content.strip()
+            is_correct = grade_letter == "A"
+            is_incorrect = grade_letter == "B"
+            is_not_attempted = grade_letter == "C"
+            
+            if is_correct:
+                return True
+            elif is_incorrect:
+                return False
+            elif is_not_attempted:
+                return "NOT_ATTEMPTED"
 
-    except Exception as e:
-        print(f"Grading error: {e}")
-        return None
+        except Exception as e:
+            if attempt == retries - 1:  # Last attempt
+                print(f"Grading error after {retries} attempts: {e}")
+                return None
+                
+            print(f"Grading attempt {attempt + 1} failed: {e}. Retrying in {delay} seconds...")
+            time.sleep(delay)
+            delay *= 2  # Exponential backoff
