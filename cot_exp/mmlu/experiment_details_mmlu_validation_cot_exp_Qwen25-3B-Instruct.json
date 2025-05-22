@@ -1,0 +1,13 @@
+{
+  "model": "Qwen/Qwen2.5-3B-Instruct",
+  "safe_model_name": "Qwen25-3B-Instruct",
+  "dataset": "mmlu",
+  "split": "validation",
+  "experiment_type": "cot_exp",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "port": 8000,
+  "workers": 32,
+  "timestamp": "2025-05-22 05:26:06",
+  "model_info": "Qwen/Qwen2.5-3B-Instruct"
+}
