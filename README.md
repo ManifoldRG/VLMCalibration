@@ -55,9 +55,12 @@ All must be run from directory of `llama-server` binary
 ```bash
 ./llama.cpp/build/bin/llama-server -m /opt/dlami/nvme/models/Meta-Llama-3.1-8B-Instruct-Q8_0.gguf -c 32768 -np 16 -t 10 -tb 10 -b 4096 -ub 2048 -cb --gpu-layers 300 # Llama
 
-./llama.cpp/build/bin/llama-server -m ./models/Qwen2.5-7B-Instruct-Q8_0.gguf -c 16384 -np 8 -t 6 -b 8192 -ub 8192 -cb --gpu-layers 300 --port 8000 # Qwen
+./llama.cpp/build/bin/llama-server -m /opt/dlami/nvme/models/Qwen2.5-7B-Instruct-Q8_0.gguf -c 36864 -np 18 -t 6 -b 4096 -ub 2048 -cb --gpu-layers 300 --port 8000 # Qwen
 
 ./llama.cpp/build/bin/llama-server -m /opt/dlami/nvme/models/gemma-2-9b-it-Q8_0.gguf -c 24576 -np 12 -t 10 -tb 10 -b 4096 -ub 2048 -cb --gpu-layers 300 # Gemma
+
+./llama.cpp/build/bin/llama-server -m /opt/dlami/nvme/models/Qwen2.5-7B-Instruct-Q4_K_M.gguf -c 45056 -np 22 -t 6 -b 4096 -ub 2048 -cb --gpu-layers 300 --port 8000 # Qwen
+
 ```
 
 
