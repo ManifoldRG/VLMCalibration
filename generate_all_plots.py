@@ -16,6 +16,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 warnings.filterwarnings('ignore')
 
+# Standardized plot sizes
+INDIVIDUAL_PLOT_SIZE = (8, 6)  # Standardized size for per-model-dataset-split plots
+SUMMARY_PLOT_SIZE = (12, 8)    # Size for summary/comparison plots
+LARGE_PLOT_SIZE = (16, 10)     # Size for complex comparison plots
+
 # Publication-quality matplotlib settings based on research best practices
 def setup_publication_style():
     """Configure matplotlib for publication-quality figures following ICML/research paper standards"""
@@ -35,7 +40,7 @@ def setup_publication_style():
     mpl.rcParams['legend.fontsize'] = 10
     
     # Figure settings
-    mpl.rcParams['figure.figsize'] = [6, 4]  # Good for papers
+    mpl.rcParams['figure.figsize'] = INDIVIDUAL_PLOT_SIZE  # Standardized individual plot size
     mpl.rcParams['figure.dpi'] = 300  # High quality
     mpl.rcParams['savefig.dpi'] = 300
     mpl.rcParams['savefig.bbox'] = 'tight'
@@ -148,7 +153,7 @@ def create_confidence_histogram(df: pd.DataFrame, metadata: Dict[str, str],
                               density: bool = True, save_dir: str = None) -> plt.Figure:
     """Create publication-quality confidence histogram"""
     
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=INDIVIDUAL_PLOT_SIZE)
     
     # Calculate statistics
     correct_data = df[df['correct'] == True]['p_true']
@@ -205,7 +210,10 @@ def create_confidence_histogram(df: pd.DataFrame, metadata: Dict[str, str],
     # Save if directory provided
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
-        filename = f"confidence_histogram_{metadata['dataset']}_{metadata['split']}_{metadata['model_name']}.pdf"
+        
+        # Add experiment type prefix to filename
+        exp_prefix = "cot_" if metadata['exp_type'] == 'cot_exp' else "zs_"
+        filename = f"{exp_prefix}confidence_histogram_{metadata['dataset']}_{metadata['split']}_{metadata['model_name']}.pdf"
         filepath = os.path.join(save_dir, filename)
         fig.savefig(filepath, dpi=300, bbox_inches='tight')
         
@@ -214,6 +222,180 @@ def create_confidence_histogram(df: pd.DataFrame, metadata: Dict[str, str],
         fig.savefig(png_filepath, dpi=300, bbox_inches='tight')
     
     return fig
+
+def create_per_dataset_summary(summary_df: pd.DataFrame, save_dir: str):
+    """Create per-dataset summary plots showing confidence when correct vs incorrect"""
+    
+    datasets = sorted(summary_df['dataset'].unique())
+    
+    if len(datasets) == 0:
+        print("⚠️  No datasets found for per-dataset summary")
+        return
+    
+    # Create a subdirectory for per-dataset plots
+    dataset_dir = os.path.join(save_dir, 'per_dataset')
+    os.makedirs(dataset_dir, exist_ok=True)
+    
+    exp_colors = {'cot_exp': '#2E8B57', 'zs_exp': '#DC143C'}  # Green for CoT, Red for ZS
+    exp_names = {'cot_exp': 'CoT', 'zs_exp': 'ZS'}
+    
+    for dataset in datasets:
+        dataset_data = summary_df[summary_df['dataset'] == dataset].copy()
+        
+        if len(dataset_data) == 0:
+            continue
+        
+        # Create the plot
+        fig, ax = plt.subplots(figsize=SUMMARY_PLOT_SIZE)
+        
+        # Get unique models and experiment types for this dataset
+        models = sorted(dataset_data['model'].unique())
+        exp_types = sorted(dataset_data['exp_type'].unique())
+        
+        # Create marker styles for models
+        markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h', 'H', '+', 'x', '8']
+        model_marker_map = {model: markers[i % len(markers)] for i, model in enumerate(models)}
+        
+        # Plot each model-experiment combination
+        for _, row in dataset_data.iterrows():
+            color = exp_colors.get(row['exp_type'], '#888888')
+            marker = model_marker_map[row['model']]
+            
+            ax.scatter(row['mean_conf_correct'], row['mean_conf_incorrect'], 
+                      c=[color], marker=marker, s=100, alpha=0.8, 
+                      edgecolors='black', linewidth=0.5)
+        
+        # Add diagonal line (perfect calibration would be mean_conf_correct = mean_conf_incorrect)
+        lims = [
+            np.min([ax.get_xlim(), ax.get_ylim()]),
+            np.max([ax.get_xlim(), ax.get_ylim()])
+        ]
+        ax.plot(lims, lims, 'k--', alpha=0.3, linewidth=1, label='Equal Confidence')
+        
+        # Create legends
+        # Experiment type legend (colors)
+        exp_handles = []
+        for exp_type in exp_types:
+            if exp_type in exp_colors:
+                handle = plt.Line2D([0], [0], marker='o', color='w', 
+                                   markerfacecolor=exp_colors[exp_type], 
+                                   markersize=10, alpha=0.8, markeredgecolor='black',
+                                   markeredgewidth=0.5, label=exp_names[exp_type])
+                exp_handles.append(handle)
+        
+        # Model legend (markers) - show full model names
+        model_handles = []
+        for model in models:
+            # Clean up model name for display
+            model_display = model.replace('-', ' ').replace('_', ' ')
+            
+            handle = plt.Line2D([0], [0], marker=model_marker_map[model], color='w',
+                               markerfacecolor='gray', markersize=8, alpha=0.8,
+                               markeredgecolor='black', markeredgewidth=0.5,
+                               label=model_display)
+            model_handles.append(handle)
+        
+        # Add legends
+        exp_legend = ax.legend(handles=exp_handles, loc='upper left', 
+                              title='Experiment Type', frameon=True, fancybox=False,
+                              edgecolor='#cccccc', facecolor='white', 
+                              framealpha=0.9, title_fontsize=10)
+        exp_legend.get_frame().set_linewidth(0.5)
+        
+        # Add model legend
+        model_legend = ax.legend(handles=model_handles, loc='center left', 
+                                bbox_to_anchor=(1.05, 0.5), title='Models',
+                                frameon=True, fancybox=False, edgecolor='#cccccc',
+                                facecolor='white', framealpha=0.9, title_fontsize=10,
+                                fontsize=9)
+        model_legend.get_frame().set_linewidth(0.5)
+        
+        # Add experiment legend back (matplotlib removes previous legend)
+        ax.add_artist(exp_legend)
+        
+        apply_clean_style(ax)
+        ax.set_xlabel('Mean Confidence When Correct', fontweight='normal')
+        ax.set_ylabel('Mean Confidence When Incorrect', fontweight='normal')
+        ax.set_title(f'Model Confidence Calibration - {dataset.upper()}', fontweight='normal', pad=15)
+        
+        # Set equal aspect ratio and reasonable limits
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_aspect('equal', adjustable='box')
+        
+        # Add grid for better readability
+        ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+        
+        # Adjust layout to make room for model legend
+        plt.subplots_adjust(right=0.7)
+        
+        # Save the plot
+        filename_base = f'calibration_summary_{dataset.lower()}'
+        fig.savefig(os.path.join(dataset_dir, f'{filename_base}.pdf'), dpi=300, bbox_inches='tight')
+        fig.savefig(os.path.join(dataset_dir, f'{filename_base}.png'), dpi=300, bbox_inches='tight')
+        plt.close(fig)
+        
+        # Create annotated version for better model identification
+        fig2, ax2 = plt.subplots(figsize=SUMMARY_PLOT_SIZE)
+        
+        # Plot with model names as text annotations
+        for _, row in dataset_data.iterrows():
+            color = exp_colors.get(row['exp_type'], '#888888')
+            ax2.scatter(row['mean_conf_correct'], row['mean_conf_incorrect'], 
+                       c=[color], s=120, alpha=0.7, edgecolors='black', linewidth=0.5)
+            
+            # Add model name as annotation
+            model_short = row['model'].replace('-', ' ').replace('_', ' ')
+            if len(model_short) > 15:
+                model_short = model_short[:12] + '...'
+            
+            # Add experiment type to annotation
+            exp_label = exp_names.get(row['exp_type'], row['exp_type'])
+            annotation = f"{model_short} ({exp_label})"
+            
+            ax2.annotate(annotation, (row['mean_conf_correct'], row['mean_conf_incorrect']),
+                        xytext=(5, 5), textcoords='offset points', fontsize=8,
+                        ha='left', va='bottom', alpha=0.8)
+        
+        # Add diagonal line
+        lims = [
+            np.min([ax2.get_xlim(), ax2.get_ylim()]),
+            np.max([ax2.get_xlim(), ax2.get_ylim()])
+        ]
+        ax2.plot(lims, lims, 'k--', alpha=0.3, linewidth=1, label='Equal Confidence')
+        
+        # Add experiment type legend only
+        ax2.legend(handles=exp_handles + [plt.Line2D([0], [0], color='k', linestyle='--', alpha=0.3, label='Equal Confidence')], 
+                  loc='upper left', title='Experiment Type',
+                  frameon=True, fancybox=False, edgecolor='#cccccc',
+                  facecolor='white', framealpha=0.9, title_fontsize=10)
+        
+        apply_clean_style(ax2)
+        ax2.set_xlabel('Mean Confidence When Correct', fontweight='normal')
+        ax2.set_ylabel('Mean Confidence When Incorrect', fontweight='normal')
+        ax2.set_title(f'Model Confidence Calibration - {dataset.upper()} (Annotated)', fontweight='normal', pad=15)
+        ax2.set_xlim(0, 1)
+        ax2.set_ylim(0, 1)
+        ax2.set_aspect('equal', adjustable='box')
+        ax2.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+        
+        plt.tight_layout()
+        fig2.savefig(os.path.join(dataset_dir, f'{filename_base}_annotated.pdf'), dpi=300, bbox_inches='tight')
+        fig2.savefig(os.path.join(dataset_dir, f'{filename_base}_annotated.png'), dpi=300, bbox_inches='tight')
+        plt.close(fig2)
+    
+    # Save per-dataset summary statistics
+    for dataset in datasets:
+        dataset_data = summary_df[summary_df['dataset'] == dataset]
+        if len(dataset_data) > 0:
+            dataset_data.to_csv(os.path.join(dataset_dir, f'summary_statistics_{dataset.lower()}.csv'), index=False)
+    
+    print(f"📊 Created per-dataset summary plots:")
+    for dataset in datasets:
+        print(f"   • {dataset.upper()}:")
+        print(f"     - calibration_summary_{dataset.lower()}.pdf/png")
+        print(f"     - calibration_summary_{dataset.lower()}_annotated.pdf/png")
+        print(f"     - summary_statistics_{dataset.lower()}.csv")
 
 def create_cot_vs_zs_comparison(summary_df: pd.DataFrame, save_dir: str):
     """Create comparison plot between CoT and ZS showing top/bottom 5 models by improvement"""
@@ -273,7 +455,7 @@ def create_cot_vs_zs_comparison(summary_df: pd.DataFrame, save_dir: str):
     plot_data['category'] = ['Top 5'] * 5 + ['Bottom 5'] * 5
     
     # Create the plot
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=LARGE_PLOT_SIZE)
     
     # Plot 1: Accuracy Improvement
     colors = ['#2E8B57' if x > 0 else '#DC143C' for x in plot_data['accuracy_improvement']]
@@ -390,7 +572,7 @@ def create_summary_plots(all_data: Dict, save_dir: str = "summary_plots"):
         exp_short = "cot" if exp_type == "cot_exp" else "zs"
         
         # Create accuracy vs confidence gap plot with proper model labeling
-        fig, ax = plt.subplots(figsize=(12, 8))
+        fig, ax = plt.subplots(figsize=SUMMARY_PLOT_SIZE)
         
         # Get unique datasets and models for this experiment type
         datasets = sorted(exp_data['dataset'].unique())
@@ -463,12 +645,12 @@ def create_summary_plots(all_data: Dict, save_dir: str = "summary_plots"):
         
         # Adjust layout to make room for full model names
         plt.subplots_adjust(right=0.7)
-        fig.savefig(os.path.join(save_dir, f'calibration_overview_{exp_short}.pdf'), dpi=300, bbox_inches='tight')
-        fig.savefig(os.path.join(save_dir, f'calibration_overview_{exp_short}.png'), dpi=300, bbox_inches='tight')
+        fig.savefig(os.path.join(save_dir, f'{exp_short}_calibration_overview.pdf'), dpi=300, bbox_inches='tight')
+        fig.savefig(os.path.join(save_dir, f'{exp_short}_calibration_overview.png'), dpi=300, bbox_inches='tight')
         plt.close(fig)
         
         # Create additional model-specific plot for better readability
-        fig2, ax2 = plt.subplots(figsize=(12, 8))
+        fig2, ax2 = plt.subplots(figsize=SUMMARY_PLOT_SIZE)
         
         # Plot with model names as text annotations
         for _, row in exp_data.iterrows():
@@ -497,12 +679,15 @@ def create_summary_plots(all_data: Dict, save_dir: str = "summary_plots"):
         ax2.set_xlim(-0.05, 1.05)
         
         plt.tight_layout()
-        fig2.savefig(os.path.join(save_dir, f'calibration_overview_{exp_short}_annotated.pdf'), dpi=300, bbox_inches='tight')
-        fig2.savefig(os.path.join(save_dir, f'calibration_overview_{exp_short}_annotated.png'), dpi=300, bbox_inches='tight')
+        fig2.savefig(os.path.join(save_dir, f'{exp_short}_calibration_overview_annotated.pdf'), dpi=300, bbox_inches='tight')
+        fig2.savefig(os.path.join(save_dir, f'{exp_short}_calibration_overview_annotated.png'), dpi=300, bbox_inches='tight')
         plt.close(fig2)
     
     # Create CoT vs ZS comparison plot
     create_cot_vs_zs_comparison(summary_df, save_dir)
+    
+    # Create per-dataset summary plots
+    create_per_dataset_summary(summary_df, save_dir)
     
     # Save summary statistics (still combined for comparison)
     summary_df.to_csv(os.path.join(save_dir, 'summary_statistics.csv'), index=False)
@@ -519,8 +704,8 @@ def create_summary_plots(all_data: Dict, save_dir: str = "summary_plots"):
         exp_short = "cot" if exp_type == "cot_exp" else "zs"
         exp_name = "Chain-of-Thought" if exp_type == "cot_exp" else "Zero-Shot"
         print(f"   • {exp_name} ({exp_short.upper()}):")
-        print(f"     - calibration_overview_{exp_short}.pdf/png")
-        print(f"     - calibration_overview_{exp_short}_annotated.pdf/png")
+        print(f"     - {exp_short}_calibration_overview.pdf/png")
+        print(f"     - {exp_short}_calibration_overview_annotated.pdf/png")
         print(f"     - summary_statistics_{exp_short}.csv")
     print(f"   • CoT vs ZS Comparison:")
     print(f"     - cot_vs_zs_comparison.pdf/png")
