@@ -1,0 +1,31 @@
+{
+  "model": "/opt/dlami/nvme/models/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+  "safe_model_name": "Qwen25-7B-Instruct-Q4_K_Mgguf",
+  "dataset": "gsm8k",
+  "split": "train",
+  "experiment_type": "zs_exp",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "port": 8000,
+  "workers": 22,
+  "timestamp": "2025-05-23 16:15:22",
+  "model_info": {
+    "object": "list",
+    "data": [
+      {
+        "id": "/opt/dlami/nvme/models/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+        "object": "model",
+        "created": 1748013529,
+        "owned_by": "llamacpp",
+        "meta": {
+          "vocab_type": 2,
+          "n_vocab": 152064,
+          "n_ctx_train": 32768,
+          "n_embd": 3584,
+          "n_params": 7615616512,
+          "size": 4677120000
+        }
+      }
+    ]
+  }
+}

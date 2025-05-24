@@ -1,0 +1,31 @@
+{
+  "model": "/opt/dlami/nvme/models/gemma-2-9b-it-Q8_0.gguf",
+  "safe_model_name": "gemma-2-9b-it-Q8_0gguf",
+  "dataset": "medmcqa",
+  "split": "validation",
+  "experiment_type": "cot_exp",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "port": 8080,
+  "workers": 12,
+  "timestamp": "2025-05-21 01:42:27",
+  "model_info": {
+    "object": "list",
+    "data": [
+      {
+        "id": "/opt/dlami/nvme/models/gemma-2-9b-it-Q8_0.gguf",
+        "object": "model",
+        "created": 1747776314,
+        "owned_by": "llamacpp",
+        "meta": {
+          "vocab_type": 1,
+          "n_vocab": 256000,
+          "n_ctx_train": 8192,
+          "n_embd": 3584,
+          "n_params": 9241705984,
+          "size": 9821091840
+        }
+      }
+    ]
+  }
+}
