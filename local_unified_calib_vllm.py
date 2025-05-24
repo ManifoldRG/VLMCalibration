@@ -465,7 +465,7 @@ def save_experiment_details(args, safe_model_name, base_dir, model_name, model_i
 if __name__ == "__main__":
     import argparse
     '''
-    vllm serve Qwen/Qwen2.5-3B-Instruct --max-model-len 4096   --dtype bfloat16   --gpu-memory-utilization 0.94   --trust-remote-code --max-logprobs 25
+    vllm serve allenai/OLMo-2-1124-13B-Instruct --max-model-len 4096   --dtype bfloat16   --gpu-memory-utilization 0.94   --trust-remote-code --max-logprobs 25 --tensor-parallel-size 4
     '''
     parser = argparse.ArgumentParser()
     parser.add_argument(
