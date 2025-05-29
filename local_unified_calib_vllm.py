@@ -209,7 +209,7 @@ def get_initial_response(task):
 
 def get_cot_explanation(task):
     try:
-        if task["exp_type"] != "cot_exp":
+        if task["exp_type"] not in ["cot_exp", "verbalized_cot"]:
             return task
 
         url = task["url"]
@@ -351,7 +351,7 @@ def get_verbalized_confidence(task):
             {"role": "assistant", "content": response_text},
         ]
 
-        if exp_type == "cot_exp":
+        if exp_type == "verbalized_cot":
             cot_text = task["cot_text"]
             messages.extend([
                 {
@@ -424,7 +424,7 @@ def finalize_result(task):
             answer = parse_simpleqa_answer(response_text)
 
         # Calculate confidence/probability based on experiment type
-        if exp_type == "verbalized":
+        if exp_type in ["verbalized", "verbalized_cot"]:
             # For verbalized confidence, parse the confidence score directly
             confidence_text = task["confidence_text"]
             p_true = parse_verbalized_confidence(confidence_text)
@@ -482,8 +482,10 @@ def finalize_result(task):
 
         if exp_type == "cot_exp":
             result["inject_cot"] = task["cot_text"]
-        elif exp_type == "verbalized":
+        elif exp_type in ["verbalized", "verbalized_cot"]:
             result["confidence_text"] = task["confidence_text"]
+            if exp_type == "verbalized_cot":
+                result["inject_cot"] = task["cot_text"]
 
         return result
     except Exception as e:
@@ -539,7 +541,7 @@ def save_experiment_details(args, safe_model_name, base_dir, model_name, model_i
 if __name__ == "__main__":
     import argparse
     '''
-    vllm serve allenai/OLMo-2-1124-13B-Instruct --max-model-len 4096   --dtype bfloat16   --gpu-memory-utilization 0.94   --trust-remote-code --max-logprobs 25 --tensor-parallel-size 4
+    vllm serve Qwen/Qwen2.5-3B-Instruct --max-model-len 4096   --dtype bfloat16   --gpu-memory-utilization 0.94   --trust-remote-code --max-logprobs 25 --tensor-parallel-size 4
     '''
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -556,7 +558,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--exp",
-        choices=["cot_exp", "zs_exp", "few_shot", "verbalized"],
+        choices=["cot_exp", "zs_exp", "few_shot", "verbalized", "verbalized_cot"],
         help="Experiment type",
         required=True,
     )
@@ -655,28 +657,34 @@ if __name__ == "__main__":
     start_idx = 0
     end_idx = len(dataset[dataset_split])
     
-    # Use consistent random sampling for datasets that need it
+    # Use pre-created index files for consistent sampling across experiments
     datasets_needing_sampling = {"medmcqa", "mmlu", "simpleqa"}
     
-    if args.dataset in datasets_needing_sampling and end_idx > 1500:
-        print(f"Sampling 1500 questions from {args.dataset} dataset as it is very large")
-        # Use fixed seed for consistent sampling across datasets
-        np.random.seed(42)
-        end_idx = min(1500, len(dataset[dataset_split]))
-        indices = [
-            int(i)
-            for i in np.random.choice(len(dataset[dataset_split]), end_idx, replace=False)
-        ]
-    elif args.dataset == "gsm8k" and end_idx > 1500:
-        print("Sampling 1500 questions from gsm8k dataset as it is very large")
-        np.random.seed(42)
-        end_idx = min(1500, len(dataset[dataset_split]))
-        indices = [
-            int(i)
-            for i in np.random.choice(len(dataset[dataset_split]), end_idx, replace=False)
-        ]
+    if args.dataset in datasets_needing_sampling:
+        # Try to load pre-created index file
+        index_file = f"{args.dataset}.json"
+        if os.path.exists(index_file):
+            print(f"Loading pre-sampled indexes from {index_file}")
+            with open(index_file, 'r') as f:
+                indices = json.load(f)
+            print(f"Loaded {len(indices)} pre-sampled indexes for {args.dataset}")
+        else:
+            print(f"Warning: Index file {index_file} not found. Using random sampling as fallback.")
+            if end_idx > 1500:
+                print(f"Sampling 1500 questions from {args.dataset} dataset as it is very large")
+                # Use fixed seed for consistent sampling across datasets
+                np.random.seed(42)
+                end_idx = min(1500, len(dataset[dataset_split]))
+                indices = [
+                    int(i)
+                    for i in np.random.choice(len(dataset[dataset_split]), end_idx, replace=False)
+                ]
+            else:
+                indices = list(range(start_idx, end_idx))
     else:
+        # Use full dataset for other datasets (like gsm8k)
         indices = list(range(start_idx, end_idx))
+        print(f"Using full dataset: {len(indices)} questions from {args.dataset}")
 
     FINAL_FILE_NAME = f"{BASE_DIR}/{args.exp}_records_{args.split}_{safe_model_name}.json"
 
@@ -723,7 +731,7 @@ if __name__ == "__main__":
         max_workers=args.workers,
     )
 
-    if args.exp == "cot_exp":
+    if args.exp == "cot_exp" or args.exp == "verbalized_cot":
         print(f"Getting CoT explanations from LLM... - workers: {args.workers}")
         tasks = process_batch(
             tasks=tasks,
@@ -732,7 +740,7 @@ if __name__ == "__main__":
             max_workers=args.workers,
         )
 
-    if args.exp == "verbalized":
+    if args.exp == "verbalized" or args.exp == "verbalized_cot":
         print(f"Getting verbalized confidence from LLM... - workers: {args.workers}")
         tasks = process_batch(
             tasks=tasks,
