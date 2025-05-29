@@ -579,6 +579,20 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    # Validate allowed dataset/split combinations
+    allowed_combinations = {
+        ("gsm8k", "test"),
+        ("medmcqa", "validation"),
+        ("mmlu", "test"),
+        ("simpleqa", "test")
+    }
+    
+    if (args.dataset, args.split) not in allowed_combinations:
+        raise ValueError(
+            f"Invalid dataset/split combination: {args.dataset}/{args.split}. "
+            f"Allowed combinations are: {', '.join([f'{d}/{s}' for d, s in allowed_combinations])}"
+        )
+
     # Attempt to infer the number of workers from a running vLLM process
     if args.workers is None:
         try:
@@ -615,10 +629,6 @@ if __name__ == "__main__":
 
     safe_model_name = get_safe_model_name(model_name)
 
-    assert not (
-        args.dataset == "medmcqa" and args.split == "test"
-    ), "MedMCQA test split does not contain answers – use validation split instead"
-
     # Load dataset
     if args.dataset == "gsm8k":
         dataset = load_dataset("openai/gsm8k", "main")
@@ -641,14 +651,26 @@ if __name__ == "__main__":
     os.makedirs(BASE_DIR, exist_ok=True)
     print(f"Base directory: {BASE_DIR}")
 
-    # Determine indices to evaluate
+    # Determine indices to evaluate with consistent sampling for large datasets
     start_idx = 0
     end_idx = len(dataset[dataset_split])
-
-    if end_idx > 5000:
-        print("Sampling 5000 questions from dataset as it is very large")
+    
+    # Use consistent random sampling for datasets that need it
+    datasets_needing_sampling = {"medmcqa", "mmlu", "simpleqa"}
+    
+    if args.dataset in datasets_needing_sampling and end_idx > 1500:
+        print(f"Sampling 1500 questions from {args.dataset} dataset as it is very large")
+        # Use fixed seed for consistent sampling across datasets
         np.random.seed(42)
-        end_idx = min(5000, len(dataset[dataset_split]))
+        end_idx = min(1500, len(dataset[dataset_split]))
+        indices = [
+            int(i)
+            for i in np.random.choice(len(dataset[dataset_split]), end_idx, replace=False)
+        ]
+    elif args.dataset == "gsm8k" and end_idx > 1500:
+        print("Sampling 1500 questions from gsm8k dataset as it is very large")
+        np.random.seed(42)
+        end_idx = min(1500, len(dataset[dataset_split]))
         indices = [
             int(i)
             for i in np.random.choice(len(dataset[dataset_split]), end_idx, replace=False)
