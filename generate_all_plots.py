@@ -16,6 +16,30 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 warnings.filterwarnings('ignore')
 
+
+MODEL_NAME_MAPPING = {
+    'Llama-32-1B-Instruct': 'Llama 3.2 1B Instruct',
+    'Llama-32-3B-Instruct': 'Llama 3.2 3B Instruct',
+    'Meta-Llama-31-8B-Instruct': 'Llama 3.1 8B Instruct',
+
+    'gemma-2-2b-it': 'Gemma 2 2B Instruct',
+    'gemma-2-9b-it': 'Gemma 2 9B Instruct',
+
+    'OLMo-2-1124-7B-Instruct': 'OLMo 2-1124 7B Instruct',
+    'OLMo-2-1124-13B-Instruct': 'OLMo 2-1124 13B Instruct',
+
+    'Qwen25-05B-Instruct': 'Qwen 2.5 0.5B Instruct',
+    'Qwen25-3B-Instruct': 'Qwen 2.5 3B Instruct',
+    'Qwen25-7B-Instruct': 'Qwen 2.5 7B Instruct',
+    'Qwen25-14B-Instruct': 'Qwen 2.5 14B Instruct',
+}
+
+# Experiment type name mapping
+EXP_TYPE_MAPPING = {
+    'cot_exp': 'CoT Self Ask',
+    'zs_exp': 'Direct Self Ask',
+}
+
 # Standardized plot sizes
 INDIVIDUAL_PLOT_SIZE = (8, 6)  # Standardized size for per-model-dataset-split plots
 SUMMARY_PLOT_SIZE = (12, 8)    # Size for summary/comparison plots
@@ -173,9 +197,9 @@ def load_json_data(filepath: str, sample: bool = True) -> pd.DataFrame:
             return None
         
         # Sample 1000 records with deterministic random state for plotting
-        if len(df) > 1000 and sample:
+        if len(df) > 1500 and sample:
             print(f"Sampling 1000 records from {filepath}")
-            df = df.sample(n=1000, random_state=42).reset_index(drop=True)
+            df = df.sample(n=1500, random_state=42).reset_index(drop=True)
         elif not sample:
             print(f"Loading all {len(df)} records from {filepath}")
             
@@ -199,7 +223,7 @@ def create_confidence_histogram(df: pd.DataFrame, metadata: Dict[str, str],
     mean_conf_incorrect = incorrect_data.mean()
     
     # Create histogram
-    bins = np.linspace(0, 1, 51)
+    bins = np.linspace(0, 1, 21)
     
     # Plot with publication-quality colors
     correct_color = '#2E8B57'    # Sea green
@@ -221,8 +245,8 @@ def create_confidence_histogram(df: pd.DataFrame, metadata: Dict[str, str],
     ylabel = 'Density' if density else 'Count'
     ax.set_ylabel(ylabel, fontweight='normal')
     
-    # Create a clean title
-    model_display = metadata['model_name'].replace('-', ' ').replace('_', ' ')
+    # Create a clean title using model name mapping
+    model_display = MODEL_NAME_MAPPING.get(metadata['model_name'], metadata['model_name'].replace('-', ' ').replace('_', ' '))
     dataset_display = metadata['dataset'].upper()
     split_display = metadata['split'].capitalize()
     
@@ -506,7 +530,7 @@ def create_cot_vs_zs_comparison(summary_df: pd.DataFrame, save_dir: str):
     ax1.set_yticks(range(len(plot_data)))
     ax1.set_yticklabels(labels, fontsize=9)
     ax1.set_xlabel('Accuracy Improvement (CoT - ZS)', fontweight='normal')
-    ax1.set_title('Model Performance: CoT vs Zero-Shot\nAccuracy Improvement', fontweight='normal', pad=15)
+    ax1.set_title(f'Model Performance: {EXP_TYPE_MAPPING["cot_exp"]} vs {EXP_TYPE_MAPPING["zs_exp"]}\nAccuracy Improvement', fontweight='normal', pad=15)
     ax1.axvline(x=0, color='black', linestyle='-', alpha=0.3, linewidth=1)
     
     # Add value labels on bars
@@ -532,7 +556,7 @@ def create_cot_vs_zs_comparison(summary_df: pd.DataFrame, save_dir: str):
     ax2.set_yticks(range(len(plot_data)))
     ax2.set_yticklabels(labels, fontsize=9)
     ax2.set_xlabel('Confidence Gap Improvement (CoT - ZS)', fontweight='normal')
-    ax2.set_title('Model Performance: CoT vs Zero-Shot\nConfidence Gap Improvement', fontweight='normal', pad=15)
+    ax2.set_title(f'Model Performance: {EXP_TYPE_MAPPING["cot_exp"]} vs {EXP_TYPE_MAPPING["zs_exp"]}\nConfidence Gap Improvement', fontweight='normal', pad=15)
     ax2.axvline(x=0, color='black', linestyle='-', alpha=0.3, linewidth=1)
     
     # Add value labels on bars
@@ -603,7 +627,7 @@ def create_family_calibration_plots(summary_df: pd.DataFrame, save_dir: str):
                 continue
             
             # Determine experiment name for titles and filenames
-            exp_name = "Chain-of-Thought (CoT)" if exp_type == "cot_exp" else "Zero-Shot (ZS)"
+            exp_name = EXP_TYPE_MAPPING[exp_type]
             exp_short = "cot" if exp_type == "cot_exp" else "zs"
             
             # Create the plot
@@ -709,7 +733,7 @@ def create_family_calibration_plots(summary_df: pd.DataFrame, save_dir: str):
     for dataset in datasets:
         for exp_type in exp_types:
             exp_short = "cot" if exp_type == "cot_exp" else "zs"
-            exp_name = "Chain-of-Thought" if exp_type == "cot_exp" else "Zero-Shot"
+            exp_name = EXP_TYPE_MAPPING[exp_type]
             print(f"   • {dataset.upper()} ({exp_name}):")
             print(f"     - family_calibration_{dataset.lower()}_{exp_short}.pdf/png")
             print(f"     - family_statistics_{dataset.lower()}_{exp_short}.csv")
@@ -726,7 +750,7 @@ def create_overall_family_comparison(summary_df: pd.DataFrame, save_dir: str, fa
         if len(exp_data) == 0:
             continue
         
-        exp_name = "Chain-of-Thought (CoT)" if exp_type == "cot_exp" else "Zero-Shot (ZS)"
+        exp_name = EXP_TYPE_MAPPING[exp_type]
         exp_short = "cot" if exp_type == "cot_exp" else "zs"
         
         # Create family aggregated statistics
@@ -831,7 +855,7 @@ def create_overall_family_comparison(summary_df: pd.DataFrame, save_dir: str, fa
     print(f"   • Overall Family Comparisons:")
     for exp_type in exp_types:
         exp_short = "cot" if exp_type == "cot_exp" else "zs"
-        exp_name = "Chain-of-Thought" if exp_type == "cot_exp" else "Zero-Shot"
+        exp_name = EXP_TYPE_MAPPING[exp_type]
         print(f"     - overall_family_comparison_{exp_short}.pdf/png ({exp_name})")
         print(f"     - overall_family_statistics_{exp_short}.csv")
 
@@ -875,7 +899,7 @@ def create_summary_plots(all_data: Dict, save_dir: str = "summary_plots"):
             continue
             
         # Determine experiment name for titles and filenames
-        exp_name = "Chain-of-Thought (CoT)" if exp_type == "cot_exp" else "Zero-Shot (ZS)"
+        exp_name = EXP_TYPE_MAPPING[exp_type]
         exp_short = "cot" if exp_type == "cot_exp" else "zs"
         
         # Create accuracy vs confidence gap plot with proper model labeling
@@ -1012,7 +1036,7 @@ def create_summary_plots(all_data: Dict, save_dir: str = "summary_plots"):
     print(f"📊 Created separate summary plots for each experiment type:")
     for exp_type in exp_types:
         exp_short = "cot" if exp_type == "cot_exp" else "zs"
-        exp_name = "Chain-of-Thought" if exp_type == "cot_exp" else "Zero-Shot"
+        exp_name = EXP_TYPE_MAPPING[exp_type]
         print(f"   • {exp_name} ({exp_short.upper()}):")
         print(f"     - {exp_short}_calibration_overview.pdf/png")
         print(f"     - {exp_short}_calibration_overview_annotated.pdf/png")
@@ -1026,6 +1050,10 @@ def process_data_only(filepath: str, sample: bool = True) -> Tuple[str, tuple, b
     """Process a single data file for summary statistics without generating plots"""
     try:
         metadata = parse_filename(filepath)
+        
+        # Skip train files
+        if metadata['split'] == 'train':
+            return filepath, None, False
         
         df = load_json_data(filepath, sample=sample)
         if df is None:
@@ -1043,6 +1071,10 @@ def process_single_file(filepath: str, sample: bool = True) -> Tuple[str, tuple,
     """Process a single data file and generate plots"""
     try:
         metadata = parse_filename(filepath)
+        
+        # Skip train files
+        if metadata['split'] == 'train':
+            return filepath, None, False
         
         df = load_json_data(filepath, sample=sample)
         if df is None:
@@ -1094,6 +1126,9 @@ def list_available_models(base_dirs: List[str], quant: bool = False) -> List[str
     for filepath in all_files:
         try:
             metadata = parse_filename(filepath)
+            # Skip train files
+            if metadata['split'] == 'train':
+                continue
             models.add(metadata['model_name'])
         except Exception:
             continue
@@ -1327,7 +1362,7 @@ def plots_across_families(all_data: Dict, save_dir: str = "family_analysis", qua
     for dataset in datasets:
         for exp_type in exp_types:
             exp_short = "cot" if exp_type == "cot_exp" else "zs"
-            exp_name = "Chain-of-Thought" if exp_type == "cot_exp" else "Zero-Shot"
+            exp_name = EXP_TYPE_MAPPING[exp_type]
             print(f"   • {dataset.upper()} ({exp_name}):")
             print(f"     - family_confidence_correct_{dataset.lower()}_{exp_short}.pdf/png")
             print(f"     - family_confidence_incorrect_{dataset.lower()}_{exp_short}.pdf/png")
@@ -1398,7 +1433,7 @@ def create_family_summary_statistics(all_data: Dict, save_dir: str,
         axes[0,0].set_xticklabels(conf_correct_matrix_cot.columns, rotation=45)
         axes[0,0].set_yticks(range(len(conf_correct_matrix_cot.index)))
         axes[0,0].set_yticklabels(conf_correct_matrix_cot.index)
-        axes[0,0].set_title('Chain-of-Thought\nMean Confidence When Correct', fontweight='bold')
+        axes[0,0].set_title(f'{EXP_TYPE_MAPPING["cot_exp"]}\nMean Confidence When Correct', fontweight='bold')
         
         # Add text annotations
         for i in range(len(conf_correct_matrix_cot.index)):
@@ -1417,7 +1452,7 @@ def create_family_summary_statistics(all_data: Dict, save_dir: str,
         axes[0,1].set_xticklabels(conf_correct_matrix_zs.columns, rotation=45)
         axes[0,1].set_yticks(range(len(conf_correct_matrix_zs.index)))
         axes[0,1].set_yticklabels(conf_correct_matrix_zs.index)
-        axes[0,1].set_title('Zero-Shot\nMean Confidence When Correct', fontweight='bold')
+        axes[0,1].set_title(f'{EXP_TYPE_MAPPING["zs_exp"]}\nMean Confidence When Correct', fontweight='bold')
         
         # Add text annotations
         for i in range(len(conf_correct_matrix_zs.index)):
@@ -1435,7 +1470,7 @@ def create_family_summary_statistics(all_data: Dict, save_dir: str,
         axes[1,0].set_xticklabels(conf_incorrect_matrix_cot.columns, rotation=45)
         axes[1,0].set_yticks(range(len(conf_incorrect_matrix_cot.index)))
         axes[1,0].set_yticklabels(conf_incorrect_matrix_cot.index)
-        axes[1,0].set_title('Chain-of-Thought\nMean Confidence When Incorrect', fontweight='bold')
+        axes[1,0].set_title(f'{EXP_TYPE_MAPPING["cot_exp"]}\nMean Confidence When Incorrect', fontweight='bold')
         
         # Add text annotations
         for i in range(len(conf_incorrect_matrix_cot.index)):
@@ -1453,7 +1488,7 @@ def create_family_summary_statistics(all_data: Dict, save_dir: str,
         axes[1,1].set_xticklabels(conf_incorrect_matrix_zs.columns, rotation=45)
         axes[1,1].set_yticks(range(len(conf_incorrect_matrix_zs.index)))
         axes[1,1].set_yticklabels(conf_incorrect_matrix_zs.index)
-        axes[1,1].set_title('Zero-Shot\nMean Confidence When Incorrect', fontweight='bold')
+        axes[1,1].set_title(f'{EXP_TYPE_MAPPING["zs_exp"]}\nMean Confidence When Incorrect', fontweight='bold')
         
         # Add text annotations
         for i in range(len(conf_incorrect_matrix_zs.index)):
@@ -1470,10 +1505,10 @@ def create_family_summary_statistics(all_data: Dict, save_dir: str,
         width = 0.35
         
         bars1 = axes[0,2].bar(x_pos - width/2, family_conf_gap['cot_exp'], width, 
-                       label='Chain-of-Thought', alpha=0.8, 
+                       label=f'{EXP_TYPE_MAPPING["cot_exp"]}', alpha=0.8, 
                        color=[family_colors.get(f, '#888888') for f in families])
         bars2 = axes[0,2].bar(x_pos + width/2, family_conf_gap['zs_exp'], width,
-                       label='Zero-Shot', alpha=0.8,
+                       label=f'{EXP_TYPE_MAPPING["zs_exp"]}', alpha=0.8,
                        color=[family_colors.get(f, '#888888') for f in families])
         
         axes[0,2].set_xlabel('Model Family')
@@ -1548,11 +1583,11 @@ def create_family_confidence_distributions(all_data: Dict, dataset: str, exp_typ
         return
     
     # Determine experiment name for titles and filenames
-    exp_name = "Chain-of-Thought" if exp_type == "cot_exp" else "Zero-Shot"
+    exp_name = EXP_TYPE_MAPPING[exp_type]
     exp_short = "cot" if exp_type == "cot_exp" else "zs"
     
     # Create separate plots for correct and incorrect confidence distributions
-    bins = np.linspace(0, 1, 51)
+    bins = np.linspace(0, 1, 21)
     
     # Colors for correct vs incorrect (consistent across all plots)
     correct_color = '#2E8B57'    # Sea green
@@ -1824,7 +1859,6 @@ def create_single_model_confidence_distributions(dataset_info: Dict, model_name:
     
     # Colors for experiment type borders/accents
     exp_border_colors = {'cot_exp': '#1B5E20', 'zs_exp': '#B71C1C'}  # Darker versions for borders
-    exp_names = {'cot_exp': 'Chain-of-Thought (CoT)', 'zs_exp': 'Zero-Shot (ZS)'}
     
     # Create combined plot showing both correct and incorrect for all experiment types
     fig, axes = plt.subplots(2, len(exp_types), figsize=(6 * len(exp_types), 10))
@@ -1833,10 +1867,10 @@ def create_single_model_confidence_distributions(dataset_info: Dict, model_name:
     if len(exp_types) == 1:
         axes = axes.reshape(2, 1)
     
-    bins = np.linspace(0, 1, 51)
+    bins = np.linspace(0, 1, 21)
     
-    # Clean model name for display
-    model_display = model_name.replace('-', ' ').replace('_', ' ')
+    # Clean model name for display using mapping
+    model_display = MODEL_NAME_MAPPING.get(model_name, model_name.replace('-', ' ').replace('_', ' '))
     
     for i, exp_type in enumerate(exp_types):
         data_info = dataset_info[exp_type]
@@ -1845,7 +1879,7 @@ def create_single_model_confidence_distributions(dataset_info: Dict, model_name:
         correct_data = df[df['correct'] == True]['p_true'].values
         incorrect_data = df[df['correct'] == False]['p_true'].values
         
-        exp_name = exp_names[exp_type]
+        exp_name = EXP_TYPE_MAPPING[exp_type]
         border_color = exp_border_colors[exp_type]
         
         # Top subplot: Confidence when correct
@@ -1896,7 +1930,7 @@ def create_single_model_confidence_distributions(dataset_info: Dict, model_name:
     plt.subplots_adjust(top=0.9)
     
     # Save the plot
-    filename = f'single_model_confidence_{dataset.lower()}'
+    filename = f'{model_name}_{dataset.lower()}'
     fig.savefig(os.path.join(save_dir, f'{filename}.pdf'), 
                dpi=300, bbox_inches='tight')
     fig.savefig(os.path.join(save_dir, f'{filename}.png'), 

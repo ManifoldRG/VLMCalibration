@@ -166,6 +166,11 @@ def calculate_metrics_for_file(filepath: str) -> Tuple[str, Optional[Dict], bool
     """Calculate calibration metrics for a single file"""
     try:
         metadata = parse_filename(filepath)
+        
+        # Skip train files
+        if metadata['split'] == 'train':
+            return filepath, None, False
+        
         df = load_json_data(filepath)
         
         if df is None:
@@ -247,13 +252,13 @@ def aggregate_model_metrics(metrics_df: pd.DataFrame) -> pd.DataFrame:
         aggregated_results.append({
             'exp_type': exp_type,
             'model_name': model_name,
+            'accuracy_weighted': accuracy_weighted,
             'ece_weighted': ece_weighted,
+            'brier_weighted': brier_weighted,
             'ece_avg': ece_avg,
             'ece_std': ece_std,
-            'brier_weighted': brier_weighted,
             'brier_avg': brier_avg,
             'brier_std': brier_std,
-            'accuracy_weighted': accuracy_weighted,
             'accuracy_avg': accuracy_avg,
             'accuracy_std': accuracy_std,
             'confidence_weighted': confidence_weighted,

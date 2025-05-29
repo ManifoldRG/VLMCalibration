@@ -59,6 +59,22 @@ def parse_simpleqa_answer(output: str) -> str:
         return answer_match.group(1).strip()
     return output
 
+def parse_verbalized_confidence(output: str) -> float:
+    """Parse verbalized confidence score from model output.
+    
+    Expected format: "Confidence: <number between 0.0 and 1.0>"
+    Returns the confidence score as a float, or None if not found.
+    """
+    confidence_match = re.search(r"Confidence:\s*([0-9]*\.?[0-9]+)", output, re.IGNORECASE)
+    if confidence_match:
+        try:
+            confidence = float(confidence_match.group(1))
+            # Clamp to valid range [0.0, 1.0]
+            return max(0.0, min(1.0, confidence))
+        except ValueError:
+            return None
+    return None
+
 # Dataset-specific answer validators
 def validate_gsm8k_answer(answer: int, true_answer: int) -> bool:
     if answer is None or not isinstance(true_answer, (int, float)):

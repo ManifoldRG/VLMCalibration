@@ -335,6 +335,70 @@ def get_confidence_score(task):
         return None
 
 
+def get_verbalized_confidence(task):
+    """Ask the model to provide a verbalized confidence score."""
+    try:
+        url = task["url"]
+        temp = task["temp"]
+        question_str = task["question_str"]
+        response_text = task["response_text"]
+        exp_type = task["exp_type"]
+        model_name = task["model_name"]
+
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": question_str},
+            {"role": "assistant", "content": response_text},
+        ]
+
+        if exp_type == "cot_exp":
+            cot_text = task["cot_text"]
+            messages.extend([
+                {
+                    "role": "user",
+                    "content": (
+                        "Before answering whether your above answer is correct, "
+                        "please provide a detailed chain-of-thought explanation of "
+                        "your reasoning. Explain step-by-step how you arrived at "
+                        "your answer and why you think it is correct or might be "
+                        "incorrect."
+                    ),
+                },
+                {"role": "assistant", "content": cot_text},
+            ])
+
+        messages.append({
+            "role": "user",
+            "content": "How confident are you that your above answer is correct? Please respond only in the format: Confidence: <number between 0.0 and 1.0>",
+        })
+
+        # Format request according to vLLM OpenAI-compatible API
+        payload = {
+            "model": model_name,
+            "messages": messages,
+            "temperature": temp,
+            "max_tokens": 100,
+        }
+
+        response = send_request(payload, url)
+        if not response:
+            return None
+
+        # Extract the verbalized confidence response
+        if "choices" in response and len(response["choices"]) > 0:
+            confidence_text = response["choices"][0]["message"]["content"]
+            task["confidence_text"] = confidence_text
+            return task
+
+        print(f"Unexpected response structure: {response}")
+        return None
+
+    except Exception as e:
+        print(f"Error getting verbalized confidence: {e}")
+        traceback.print_exc()
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Post-processing helpers (unchanged)
 # ---------------------------------------------------------------------------
@@ -347,7 +411,6 @@ def finalize_result(task):
         dataset_split = task["dataset_split"]
         idx = task["idx"]
         response_text = task["response_text"]
-        logprobs = task["logprobs"]
         exp_type = task["exp_type"]
 
         # Parse answer based on dataset type
@@ -360,24 +423,33 @@ def finalize_result(task):
         elif dataset_type == "simpleqa":
             answer = parse_simpleqa_answer(response_text)
 
-        # Calculate probability of true/false
-        probs = {"true": 0.0, "false": 0.0}
+        # Calculate confidence/probability based on experiment type
+        if exp_type == "verbalized":
+            # For verbalized confidence, parse the confidence score directly
+            confidence_text = task["confidence_text"]
+            p_true = parse_verbalized_confidence(confidence_text)
+            if p_true is None:
+                p_true = 0.5  # Default to neutral confidence if parsing fails
+        else:
+            # For other experiment types, use logprobs
+            logprobs = task["logprobs"]
+            probs = {"true": 0.0, "false": 0.0}
 
-        for item in logprobs:
-            token = item["token"].lower()
-            is_true_synonym = any(synonym in token for synonym in TRUE_SYNONYMS)
-            is_false_synonym = any(synonym in token for synonym in FALSE_SYNONYMS)
+            for item in logprobs:
+                token = item["token"].lower()
+                is_true_synonym = any(synonym in token for synonym in TRUE_SYNONYMS)
+                is_false_synonym = any(synonym in token for synonym in FALSE_SYNONYMS)
 
-            if is_true_synonym:
-                probs["true"] += np.exp(item["logprob"])
-            elif is_false_synonym:
-                probs["false"] += np.exp(item["logprob"])
+                if is_true_synonym:
+                    probs["true"] += np.exp(item["logprob"])
+                elif is_false_synonym:
+                    probs["false"] += np.exp(item["logprob"])
 
-        p_true = (
-            probs["true"] / (probs["true"] + probs["false"])
-            if (probs["true"] + probs["false"]) > 0
-            else 0.0
-        )
+            p_true = (
+                probs["true"] / (probs["true"] + probs["false"])
+                if (probs["true"] + probs["false"]) > 0
+                else 0.0
+            )
 
         # Get and validate true answer based on dataset type
         if dataset_type == "gsm8k":
@@ -410,6 +482,8 @@ def finalize_result(task):
 
         if exp_type == "cot_exp":
             result["inject_cot"] = task["cot_text"]
+        elif exp_type == "verbalized":
+            result["confidence_text"] = task["confidence_text"]
 
         return result
     except Exception as e:
@@ -482,7 +556,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--exp",
-        choices=["cot_exp", "zs_exp", "few_shot"],
+        choices=["cot_exp", "zs_exp", "few_shot", "verbalized"],
         help="Experiment type",
         required=True,
     )
@@ -636,13 +710,22 @@ if __name__ == "__main__":
             max_workers=args.workers,
         )
 
-    print(f"Getting confidence scores from LLM... - workers: {args.workers}")
-    tasks = process_batch(
-        tasks=tasks,
-        process_fn=get_confidence_score,
-        desc="Getting confidence scores",
-        max_workers=args.workers,
-    )
+    if args.exp == "verbalized":
+        print(f"Getting verbalized confidence from LLM... - workers: {args.workers}")
+        tasks = process_batch(
+            tasks=tasks,
+            process_fn=get_verbalized_confidence,
+            desc="Getting verbalized confidence",
+            max_workers=args.workers,
+        )
+    else:
+        print(f"Getting confidence scores from LLM... - workers: {args.workers}")
+        tasks = process_batch(
+            tasks=tasks,
+            process_fn=get_confidence_score,
+            desc="Getting confidence scores",
+            max_workers=args.workers,
+        )
 
     print("Finalizing results...")
     records = process_batch(
