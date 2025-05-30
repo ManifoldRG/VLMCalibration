@@ -184,19 +184,39 @@ def get_initial_response(task):
         temp = task["temp"]
         max_tokens = task["max_tokens"]
         question_str = task["question_str"]
+        exp_type = task["exp_type"]
+        model_name = task["model_name"]
 
-        payload = {
-            "messages": [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": question_str},
-            ],
-            "temperature": temp,
-            "max_tokens": max_tokens,
-        }
+        # Check if model requires system prompt to be moved to user prompt
+        needs_user_prompt = any(keyword in model_name.lower() for keyword in ["google", "deepseek"])
+
+        if needs_user_prompt:
+            # For Google/DeepSeek models, combine system message with user message
+            payload = {
+                "messages": [
+                    {"role": "user", "content": "You are a helpful assistant. " + question_str},
+                ],
+                "temperature": temp,
+                "max_tokens": max_tokens,
+            }
+        else:
+            # For other models, use separate system and user messages
+            payload = {
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": question_str},
+                ],
+                "temperature": temp,
+                "max_tokens": max_tokens,
+            }
 
         response = send_request(payload, url)
         if not response:
             return None
+
+        # # Store prompts for monitoring (can be commented out later)
+        # task["prompts"] = task.get("prompts", [])
+        # task["prompts"].append({"step": "initial_response", "messages": payload["messages"]})
 
         response_text = response["choices"][0]["message"]["content"]
         task["response_text"] = response_text
@@ -209,7 +229,7 @@ def get_initial_response(task):
 
 def get_cot_explanation(task):
     try:
-        if task["exp_type"] not in ["cot_exp", "verbalized_cot"]:
+        if task["exp_type"] not in ["cot_exp", "verbalized_cot", "otherAI_cot", "otherAI_verbalized_cot"]:
             return task
 
         url = task["url"]
@@ -217,23 +237,71 @@ def get_cot_explanation(task):
         max_tokens = task["max_tokens"]
         question_str = task["question_str"]
         response_text = task["response_text"]
+        exp_type = task["exp_type"]
+        model_name = task["model_name"]
+
+        # Check if model requires system prompt to be moved to user prompt
+        needs_user_prompt = any(keyword in model_name.lower() for keyword in ["google", "deepseek"])
+
+        # Use different message format and prompts based on experiment type
+        if exp_type in ["otherAI_cot", "otherAI_verbalized_cot"]:
+            # For "other AI" experiments, include the answer in the user prompt with tags
+            cot_prompt = (
+                f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
+                f"Question: {question_str}\n\n"
+                f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
+                f"Above is a conversation between the user and another AI. Before answering whether the above answer given by another AI is correct, "
+                "please provide a detailed chain-of-thought explanation of "
+                "your reasoning. Explain step-by-step how you arrived at "
+                "your answer and why you think it is correct or might be "
+                "incorrect."
+            )
+            
+            if needs_user_prompt:
+                messages = [
+                    {"role": "user", "content": "You are a helpful assistant. " + cot_prompt},
+                ]
+            else:
+                messages = [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": cot_prompt},
+                ]
+        else:
+            # For original experiments, use appropriate format and original prompt
+            if needs_user_prompt:
+                messages = [
+                    {"role": "user", "content": "You are a helpful assistant. " + question_str},
+                    {"role": "assistant", "content": response_text},
+                    {
+                        "role": "user",
+                        "content": (
+                            "Before answering whether your above answer is correct, "
+                            "please provide a detailed chain-of-thought explanation of "
+                            "your reasoning. Explain step-by-step how you arrived at "
+                            "your answer and why you think it is correct or might be "
+                            "incorrect."
+                        ),
+                    },
+                ]
+            else:
+                messages = [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": question_str},
+                    {"role": "assistant", "content": response_text},
+                    {
+                        "role": "user",
+                        "content": (
+                            "Before answering whether your above answer is correct, "
+                            "please provide a detailed chain-of-thought explanation of "
+                            "your reasoning. Explain step-by-step how you arrived at "
+                            "your answer and why you think it is correct or might be "
+                            "incorrect."
+                        ),
+                    },
+                ]
 
         payload = {
-            "messages": [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": question_str},
-                {"role": "assistant", "content": response_text},
-                {
-                    "role": "user",
-                    "content": (
-                        "Before answering whether your above answer is correct, "
-                        "please provide a detailed chain-of-thought explanation of "
-                        "your reasoning. Explain step-by-step how you arrived at "
-                        "your answer and why you think it is correct or might be "
-                        "incorrect."
-                    ),
-                },
-            ],
+            "messages": messages,
             "temperature": temp,
             "max_tokens": max_tokens,
         }
@@ -241,6 +309,10 @@ def get_cot_explanation(task):
         response = send_request(payload, url)
         if not response:
             return None
+
+        # # Store prompts for monitoring (can be commented out later)
+        # task["prompts"] = task.get("prompts", [])
+        # task["prompts"].append({"step": "cot_explanation", "messages": payload["messages"]})
 
         cot_text = response["choices"][0]["message"]["content"]
         task["cot_text"] = cot_text
@@ -261,11 +333,46 @@ def get_confidence_score(task):
         exp_type = task["exp_type"]
         model_name = task["model_name"]
 
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": question_str},
-            {"role": "assistant", "content": response_text},
-        ]
+        # Check if model requires system prompt to be moved to user prompt
+        needs_user_prompt = any(keyword in model_name.lower() for keyword in ["google", "deepseek"])
+
+        # Use different message format based on model type
+        if needs_user_prompt:
+            # For Google/DeepSeek models, combine system message with user message
+            if exp_type in ["otherAI", "otherAI_cot"]:
+                # For otherAI experiments, include the answer in the user prompt with tags
+                base_prompt = (
+                    f"You are a helpful assistant. You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
+                    f"Question: {question_str}\n\n"
+                    f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
+                )
+                messages = [{"role": "user", "content": base_prompt}]
+            else:
+                # For original experiments, use conversation format
+                messages = [
+                    {"role": "user", "content": "You are a helpful assistant. " + question_str},
+                    {"role": "assistant", "content": response_text},
+                ]
+        else:
+            # For other models, use separate system and user messages
+            if exp_type in ["otherAI", "otherAI_cot"]:
+                # For otherAI experiments, include the answer in the user prompt with tags
+                base_prompt = (
+                    f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
+                    f"Question: {question_str}\n\n"
+                    f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
+                )
+                messages = [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": base_prompt},
+                ]
+            else:
+                # For original experiments, use conversation format
+                messages = [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": question_str},
+                    {"role": "assistant", "content": response_text},
+                ]
 
         if exp_type == "cot_exp":
             cot_text = task["cot_text"]
@@ -282,10 +389,19 @@ def get_confidence_score(task):
                 },
                 {"role": "assistant", "content": cot_text},
             ])
+        elif exp_type == "otherAI_cot":
+            cot_text = task["cot_text"]
+            messages.append({"role": "assistant", "content": cot_text})
+
+        # Use different final prompt based on experiment type
+        if exp_type in ["otherAI", "otherAI_cot"]:
+            final_prompt = "Is the above answer given by another AI true or false? Answer only with the single word 'true' or 'false'."
+        else:
+            final_prompt = "Is the above answer true or false? Answer only with the single word 'true' or 'false'."
 
         messages.append({
             "role": "user",
-            "content": "Is the above answer correct? Answer only with the single word 'true' or 'false'.",
+            "content": final_prompt,
         })
 
         # Format request according to vLLM OpenAI-compatible API
@@ -301,6 +417,10 @@ def get_confidence_score(task):
         response = send_request(payload, url)
         if not response:
             return None
+
+        # # Store prompts for monitoring (can be commented out later)
+        # task["prompts"] = task.get("prompts", [])
+        # task["prompts"].append({"step": "confidence_score", "messages": payload["messages"]})
 
         # Extract logprobs from the response
         if "choices" in response and len(response["choices"]) > 0:
@@ -345,11 +465,46 @@ def get_verbalized_confidence(task):
         exp_type = task["exp_type"]
         model_name = task["model_name"]
 
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": question_str},
-            {"role": "assistant", "content": response_text},
-        ]
+        # Check if model requires system prompt to be moved to user prompt
+        needs_user_prompt = any(keyword in model_name.lower() for keyword in ["google", "deepseek"])
+
+        # Use different message format based on model type
+        if needs_user_prompt:
+            # For Google/DeepSeek models, combine system message with user message
+            if exp_type in ["otherAI_verbalized", "otherAI_verbalized_cot"]:
+                # For otherAI experiments, include the answer in the user prompt with tags
+                base_prompt = (
+                    f"You are a helpful assistant. You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
+                    f"Question: {question_str}\n\n"
+                    f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
+                )
+                messages = [{"role": "user", "content": base_prompt}]
+            else:
+                # For original experiments, use conversation format
+                messages = [
+                    {"role": "user", "content": "You are a helpful assistant. " + question_str},
+                    {"role": "assistant", "content": response_text},
+                ]
+        else:
+            # For other models, use separate system and user messages
+            if exp_type in ["otherAI_verbalized", "otherAI_verbalized_cot"]:
+                # For otherAI experiments, include the answer in the user prompt with tags
+                base_prompt = (
+                    f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
+                    f"Question: {question_str}\n\n"
+                    f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
+                )
+                messages = [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": base_prompt},
+                ]
+            else:
+                # For original experiments, use conversation format
+                messages = [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": question_str},
+                    {"role": "assistant", "content": response_text},
+                ]
 
         if exp_type == "verbalized_cot":
             cot_text = task["cot_text"]
@@ -366,10 +521,19 @@ def get_verbalized_confidence(task):
                 },
                 {"role": "assistant", "content": cot_text},
             ])
+        elif exp_type == "otherAI_verbalized_cot":
+            cot_text = task["cot_text"]
+            messages.append({"role": "assistant", "content": cot_text})
+
+        # Use different final prompt based on experiment type
+        if exp_type in ["otherAI", "otherAI_cot", "otherAI_verbalized", "otherAI_verbalized_cot"]:
+            final_prompt = "How confident are you that the above answer given by another AI is correct? Please respond only in the format: Confidence: <number between 0.0 and 1.0>"
+        else:
+            final_prompt = "How confident are you that your above answer is correct? Please respond only in the format: Confidence: <number between 0.0 and 1.0>"
 
         messages.append({
             "role": "user",
-            "content": "How confident are you that your above answer is correct? Please respond only in the format: Confidence: <number between 0.0 and 1.0>",
+            "content": final_prompt,
         })
 
         # Format request according to vLLM OpenAI-compatible API
@@ -377,12 +541,16 @@ def get_verbalized_confidence(task):
             "model": model_name,
             "messages": messages,
             "temperature": temp,
-            "max_tokens": 100,
+            "max_tokens": 512,
         }
 
         response = send_request(payload, url)
         if not response:
             return None
+
+        # # Store prompts for monitoring (can be commented out later)
+        # task["prompts"] = task.get("prompts", [])
+        # task["prompts"].append({"step": "verbalized_confidence", "messages": payload["messages"]})
 
         # Extract the verbalized confidence response
         if "choices" in response and len(response["choices"]) > 0:
@@ -424,7 +592,7 @@ def finalize_result(task):
             answer = parse_simpleqa_answer(response_text)
 
         # Calculate confidence/probability based on experiment type
-        if exp_type in ["verbalized", "verbalized_cot"]:
+        if exp_type in ["verbalized", "verbalized_cot", "otherAI_verbalized", "otherAI_verbalized_cot"]:
             # For verbalized confidence, parse the confidence score directly
             confidence_text = task["confidence_text"]
             p_true = parse_verbalized_confidence(confidence_text)
@@ -478,14 +646,17 @@ def finalize_result(task):
             "p_true": p_true,
             "true_answer": true_answer,
             "correct": is_correct,
+            # "prompts": task.get("prompts", []),  # Add prompts for monitoring (can be commented out later)
         }
 
         if exp_type == "cot_exp":
             result["inject_cot"] = task["cot_text"]
-        elif exp_type in ["verbalized", "verbalized_cot"]:
+        elif exp_type in ["verbalized", "verbalized_cot", "otherAI_verbalized", "otherAI_verbalized_cot"]:
             result["confidence_text"] = task["confidence_text"]
-            if exp_type == "verbalized_cot":
+            if exp_type in ["verbalized_cot", "otherAI_verbalized_cot"]:
                 result["inject_cot"] = task["cot_text"]
+        elif exp_type == "otherAI_cot":
+            result["inject_cot"] = task["cot_text"]
 
         return result
     except Exception as e:
@@ -541,7 +712,7 @@ def save_experiment_details(args, safe_model_name, base_dir, model_name, model_i
 if __name__ == "__main__":
     import argparse
     '''
-    vllm serve Qwen/Qwen2.5-3B-Instruct --max-model-len 4096   --dtype bfloat16   --gpu-memory-utilization 0.94   --trust-remote-code --max-logprobs 25 --tensor-parallel-size 4
+    vllm serve Qwen/Qwen2.5-0.5B-Instruct --max-model-len 4096   --dtype bfloat16   --gpu-memory-utilization 0.94   --trust-remote-code --max-logprobs 25 --tensor-parallel-size 4
     '''
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -558,7 +729,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--exp",
-        choices=["cot_exp", "zs_exp", "few_shot", "verbalized", "verbalized_cot"],
+        choices=["cot_exp", "zs_exp", "verbalized", "verbalized_cot", "otherAI", "otherAI_cot", "otherAI_verbalized", "otherAI_verbalized_cot"],
         help="Experiment type",
         required=True,
     )
@@ -731,7 +902,7 @@ if __name__ == "__main__":
         max_workers=args.workers,
     )
 
-    if args.exp == "cot_exp" or args.exp == "verbalized_cot":
+    if args.exp == "cot_exp" or args.exp == "verbalized_cot" or args.exp == "otherAI_cot" or args.exp == "otherAI_verbalized_cot":
         print(f"Getting CoT explanations from LLM... - workers: {args.workers}")
         tasks = process_batch(
             tasks=tasks,
@@ -740,7 +911,7 @@ if __name__ == "__main__":
             max_workers=args.workers,
         )
 
-    if args.exp == "verbalized" or args.exp == "verbalized_cot":
+    if args.exp == "verbalized" or args.exp == "verbalized_cot" or args.exp == "otherAI_verbalized" or args.exp == "otherAI_verbalized_cot":
         print(f"Getting verbalized confidence from LLM... - workers: {args.workers}")
         tasks = process_batch(
             tasks=tasks,
