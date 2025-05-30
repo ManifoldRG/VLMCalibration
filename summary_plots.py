@@ -216,7 +216,8 @@ def create_performance_landscape_with_alphashapes(summary_df: pd.DataFrame, exp_
     # Model legend (markers) - show only first few to avoid clutter
     model_handles = []
     for i, model in enumerate(models[:8]):  # Limit to first 8 models
-        model_display = model.replace('-', ' ').replace('_', ' ')
+        # Use MODEL_NAME_MAPPING for consistent display names
+        model_display = MODEL_NAME_MAPPING.get(model, model)
         if len(model_display) > 15:
             model_display = model_display[:12] + '...'
         
@@ -505,6 +506,7 @@ def create_summary_plots(all_data: Dict, save_dir: str = "summary_plots"):
     create_calibration_metrics_comparison(summary_df, save_dir)
     
     # Create per-dataset summary plots (updated with ECE)
+    print(f"   • Per-dataset calibration summaries")
     create_per_dataset_summary(summary_df, save_dir)
     
     # Save enhanced summary statistics
@@ -526,6 +528,8 @@ def create_summary_plots(all_data: Dict, save_dir: str = "summary_plots"):
     print(f"   • Cross-Analysis:")
     print(f"     - cross_dataset_consistency.pdf/png")
     print(f"     - enhanced_cot_vs_zs_comparison.pdf/png")
+    print(f"   • Per-Dataset Analysis:")
+    print(f"     - per_dataset/ (individual calibration plots for each dataset)")
     print(f"   • Data: enhanced_summary_statistics.csv (with ECE, Brier score, overconfidence rate)")
 
 
@@ -592,8 +596,8 @@ def create_per_dataset_summary(summary_df: pd.DataFrame, save_dir: str):
         # Model legend (markers) - show full model names
         model_handles = []
         for model in models:
-            # Clean up model name for display
-            model_display = model.replace('-', ' ').replace('_', ' ')
+            # Use MODEL_NAME_MAPPING for consistent display names
+            model_display = MODEL_NAME_MAPPING.get(model, model)
             
             handle = plt.Line2D([0], [0], marker=model_marker_map[model], color='w',
                                markerfacecolor='gray', markersize=8, alpha=0.8,
@@ -649,14 +653,14 @@ def create_per_dataset_summary(summary_df: pd.DataFrame, save_dir: str):
             ax2.scatter(row['mean_conf_correct'], row['mean_conf_incorrect'], 
                        c=[color], s=120, alpha=0.7, edgecolors='black', linewidth=0.5)
             
-            # Add model name as annotation
-            model_short = row['model'].replace('-', ' ').replace('_', ' ')
-            if len(model_short) > 15:
-                model_short = model_short[:12] + '...'
+            # Add model name as annotation using MODEL_NAME_MAPPING
+            model_display = MODEL_NAME_MAPPING.get(row['model'], row['model'])
+            if len(model_display) > 15:
+                model_display = model_display[:12] + '...'
             
             # Add experiment type to annotation
             exp_label = exp_names.get(row['exp_type'], row['exp_type'])
-            annotation = f"{model_short} ({exp_label})"
+            annotation = f"{model_display} ({exp_label})"
             
             ax2.annotate(annotation, (row['mean_conf_correct'], row['mean_conf_incorrect']),
                         xytext=(5, 5), textcoords='offset points', fontsize=8,

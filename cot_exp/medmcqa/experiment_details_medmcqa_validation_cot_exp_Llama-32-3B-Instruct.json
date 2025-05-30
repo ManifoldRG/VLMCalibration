@@ -1,0 +1,13 @@
+{
+  "model": "meta-llama/Llama-3.2-3B-Instruct",
+  "safe_model_name": "Llama-32-3B-Instruct",
+  "dataset": "medmcqa",
+  "split": "validation",
+  "experiment_type": "cot_exp",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "port": 8000,
+  "workers": 32,
+  "timestamp": "2025-05-30 19:35:21",
+  "model_info": "meta-llama/Llama-3.2-3B-Instruct"
+}

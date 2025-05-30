@@ -395,7 +395,21 @@ def get_confidence_score(task):
             ])
         elif exp_type == "otherAI_cot":
             cot_text = task["cot_text"]
-            messages.append({"role": "assistant", "content": cot_text})
+            # Include the same CoT prompt that was used to generate the explanation
+            cot_prompt = (
+                f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
+                f"Question: {question_str}\n\n"
+                f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
+                f"Above is a conversation between the user and another AI. Before answering whether the above answer given by another AI is correct, "
+                "please provide a detailed chain-of-thought explanation of "
+                "your reasoning. Explain step-by-step how you arrived at "
+                "your answer and why you think it is correct or might be "
+                "incorrect."
+            )
+            messages.extend([
+                {"role": "user", "content": cot_prompt},
+                {"role": "assistant", "content": cot_text},
+            ])
 
         # Use different final prompt based on experiment type
         if exp_type in ["otherAI", "otherAI_cot"]:
@@ -527,7 +541,21 @@ def get_verbalized_confidence(task):
             ])
         elif exp_type == "otherAI_verbalized_cot":
             cot_text = task["cot_text"]
-            messages.append({"role": "assistant", "content": cot_text})
+            # Include the same CoT prompt that was used to generate the explanation
+            cot_prompt = (
+                f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
+                f"Question: {question_str}\n\n"
+                f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
+                f"Above is a conversation between the user and another AI. Before answering whether the above answer given by another AI is correct, "
+                "please provide a detailed chain-of-thought explanation of "
+                "your reasoning. Explain step-by-step how you arrived at "
+                "your answer and why you think it is correct or might be "
+                "incorrect."
+            )
+            messages.extend([
+                {"role": "user", "content": cot_prompt},
+                {"role": "assistant", "content": cot_text},
+            ])
 
         # Use different final prompt based on experiment type
         if exp_type in ["otherAI", "otherAI_cot", "otherAI_verbalized", "otherAI_verbalized_cot"]:

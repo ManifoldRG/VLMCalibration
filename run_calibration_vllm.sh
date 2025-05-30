@@ -27,7 +27,8 @@ permitted_combinations["simpleqa"]="test"
 # permitted_combinations["truthfulqa"]="validation"
 
 datasets=("gsm8k" "mmlu" "medmcqa" "simpleqa" )
-exps=("cot_exp" "zs_exp" "verbalized" "verbalized_cot" "otherAI" "otherAI_cot")
+# "otherAI_cot"
+exps=("cot_exp" "zs_exp" "verbalized" "verbalized_cot" "otherAI")
 
 # Function to extract parameter size from model name and determine workers
 get_workers_for_model() {
