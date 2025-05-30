@@ -3,7 +3,7 @@
 # Script for running calibration experiments specifically on deepseek-ai/deepseek-math-7b-instruct
 # Runs all allowed dataset/experiment/split combinations
 
-model="deepseek-ai/deepseek-math-7b-instruct"
+model="deepseek-ai/deepseek-math-7b-rl"
 
 # Define permitted combinations based on local_unified_calib_vllm.py
 declare -A permitted_combinations
@@ -14,7 +14,7 @@ permitted_combinations["simpleqa"]="test"
 
 datasets=("gsm8k" "mmlu" "medmcqa" "simpleqa")
 # All allowed experiment types from local_unified_calib_vllm.py
-exps=("cot_exp" "zs_exp" "few_shot" "verbalized" "verbalized_cot")
+exps=("cot_exp" "zs_exp" "verbalized" "verbalized_cot")
 
 # Workers for 7B model (>=7B gets 20 workers)
 workers=20
@@ -69,10 +69,11 @@ vllm serve "$model" \
     --tensor-parallel-size 4 \
     --port 8000 > /dev/null 2>&1 &
 
-sleep 120 # wait for the server to start
-# Store the PID of the vLLM server
+# Store the PID immediately after backgrounding
 VLLM_PID=$!
 echo "vLLM server started with PID: $VLLM_PID"
+
+sleep 120 # wait for the server to start
 
 # Wait for server to be ready
 if ! check_server_ready 8000; then
