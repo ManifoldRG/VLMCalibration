@@ -105,8 +105,8 @@ for model in "${models[@]}"; do
         --gpu-memory-utilization 0.94 \
         --trust-remote-code \
         --max-logprobs 25 \
-        --tensor-parallel-size 4 \
         --port 8000 > /dev/null 2>&1 &
+        # --tensor-parallel-size 4 \
     
     sleep 120 # wait for the server to start
     # Store the PID of the vLLM server
