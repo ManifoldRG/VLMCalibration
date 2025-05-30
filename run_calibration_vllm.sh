@@ -2,13 +2,10 @@
 
 # Define models to test (placeholders for now)
 models=(
-    "meta-llama/Llama-3.2-1B-Instruct"
-    "meta-llama/Llama-3.2-3B-Instruct" 
     "meta-llama/Llama-3.1-8B-Instruct"
     "google/gemma-2-2b-it"
     "Qwen/Qwen2.5-14B-Instruct"
     "allenai/OLMo-2-1124-7B-Instruct"
-    "allenai/OLMo-2-1124-13B-Instruct"
     # GEMMA NEEDS NO SYSTEM PROMPT - eval later
     "google/gemma-2-9b-it"
     "Qwen/Qwen2.5-0.5B-Instruct"
@@ -16,6 +13,10 @@ models=(
     "Qwen/Qwen2.5-7B-Instruct"
     "deepseek-ai/deepseek-math-7b-rl"
     "deepseek-ai/deepseek-math-7b-instruct"
+
+    "meta-llama/Llama-3.2-1B-Instruct"
+    "meta-llama/Llama-3.2-3B-Instruct" 
+    "allenai/OLMo-2-1124-13B-Instruct"
 )
 
 # Define permitted combinations based on local_unified_calib_vllm.py
@@ -42,9 +43,9 @@ get_workers_for_model() {
         # Convert to float comparison (bash doesn't handle float comparison natively)
         # Use awk for floating point comparison
         if awk "BEGIN {exit !($param_size >= 7)}"; then
-            echo 20
+            echo 28
         else
-            echo 32
+            echo 40
         fi
     else
         # Default to 20 workers if we can't parse the model size
