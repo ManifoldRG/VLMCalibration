@@ -1,0 +1,13 @@
+{
+  "model": "allenai/OLMo-2-1124-13B-Instruct",
+  "safe_model_name": "OLMo-2-1124-13B-Instruct",
+  "dataset": "simpleqa",
+  "split": "test",
+  "experiment_type": "verbalized_cot",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "port": 8000,
+  "workers": 20,
+  "timestamp": "2025-05-30 09:20:16",
+  "model_info": "allenai/OLMo-2-1124-13B-Instruct"
+}
