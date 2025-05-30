@@ -340,80 +340,89 @@ def get_confidence_score(task):
         # Check if model requires system prompt to be moved to user prompt
         needs_user_prompt = any(keyword in model_name.lower() for keyword in ["google", "deepseek"])
 
-        # Use different message format based on model type
-        if needs_user_prompt:
-            # For Google/DeepSeek models, combine system message with user message
-            if exp_type in ["otherAI", "otherAI_cot"]:
-                # For otherAI experiments, include the answer in the user prompt with tags
-                base_prompt = (
-                    f"You are a helpful assistant. You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
-                    f"Question: {question_str}\n\n"
-                    f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
-                )
-                messages = [{"role": "user", "content": base_prompt}]
-            else:
-                # For original experiments, use conversation format
-                messages = [
-                    {"role": "user", "content": "You are a helpful assistant. " + question_str},
-                    {"role": "assistant", "content": response_text},
-                ]
-        else:
-            # For other models, use separate system and user messages
-            if exp_type in ["otherAI", "otherAI_cot"]:
-                # For otherAI experiments, include the answer in the user prompt with tags
-                base_prompt = (
-                    f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
-                    f"Question: {question_str}\n\n"
-                    f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
-                )
-                messages = [
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": base_prompt},
-                ]
-            else:
-                # For original experiments, use conversation format
-                messages = [
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": question_str},
-                    {"role": "assistant", "content": response_text},
-                ]
-
-        if exp_type == "cot_exp":
+        # Build conversation based on experiment type
+        if exp_type == "otherAI_cot":
+            # For otherAI_cot, recreate the conversation that led to the CoT
             cot_text = task["cot_text"]
-            messages.extend([
-                {
-                    "role": "user",
-                    "content": (
-                        "Before answering whether your above answer is correct, "
-                        "please provide a detailed chain-of-thought explanation of "
-                        "your reasoning. Explain step-by-step how you arrived at "
-                        "your answer and why you think it is correct or might be "
-                        "incorrect."
-                    ),
-                },
-                {"role": "assistant", "content": cot_text},
-            ])
-        elif exp_type == "otherAI_cot":
-            cot_text = task["cot_text"]
-            # Include the same CoT prompt that was used to generate the explanation
             cot_prompt = (
                 f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
                 f"Question: {question_str}\n\n"
                 f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
-                f"Before answering whether the above answer given by another AI is correct, "
+                f"Before answering whether the other AI's answer is correct or incorrect, "
                 "please provide a detailed chain-of-thought explanation of "
-                "your reasoning. Explain step-by-step how you arrived at "
-                "your answer and why you think it is correct or might be "
-                "incorrect."
+                "your reasoning. Analyze the other AI's answer step-by-step, "
+                "explain your evaluation process, and determine whether "
+                "the other AI's answer is correct or incorrect and why."
             )
-            messages.extend([
-                {"role": "user", "content": cot_prompt},
-                {"role": "assistant", "content": cot_text},
-            ])
+            if needs_user_prompt:
+                messages = [
+                    {"role": "user", "content": "You are a helpful assistant. " + cot_prompt},
+                    {"role": "assistant", "content": cot_text},
+                ]
+            else:
+                messages = [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": cot_prompt},
+                    {"role": "assistant", "content": cot_text},
+                ]
+        else:
+            # For other experiment types, use original logic
+            if needs_user_prompt:
+                # For Google/DeepSeek models, combine system message with user message
+                if exp_type == "otherAI":
+                    # For otherAI experiments, include the answer in the user prompt with tags
+                    base_prompt = (
+                        f"You are a helpful assistant. You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
+                        f"Question: {question_str}\n\n"
+                        f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
+                    )
+                    messages = [{"role": "user", "content": base_prompt}]
+                else:
+                    # For original experiments, use conversation format
+                    messages = [
+                        {"role": "user", "content": "You are a helpful assistant. " + question_str},
+                        {"role": "assistant", "content": response_text},
+                    ]
+            else:
+                # For other models, use separate system and user messages
+                if exp_type == "otherAI":
+                    # For otherAI experiments, include the answer in the user prompt with tags
+                    base_prompt = (
+                        f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
+                        f"Question: {question_str}\n\n"
+                        f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
+                    )
+                    messages = [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": base_prompt},
+                    ]
+                else:
+                    # For original experiments, use conversation format
+                    messages = [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": question_str},
+                        {"role": "assistant", "content": response_text},
+                    ]
+
+            if exp_type == "cot_exp":
+                cot_text = task["cot_text"]
+                messages.extend([
+                    {
+                        "role": "user",
+                        "content": (
+                            "Before answering whether your above answer is correct, "
+                            "please provide a detailed chain-of-thought explanation of "
+                            "your reasoning. Explain step-by-step how you arrived at "
+                            "your answer and why you think it is correct or might be "
+                            "incorrect."
+                        ),
+                    },
+                    {"role": "assistant", "content": cot_text},
+                ])
 
         # Use different final prompt based on experiment type
         if exp_type in ["otherAI", "otherAI_cot"]:
-            final_prompt = "Is the above answer given by another AI true or false? Answer only with the single word 'true' or 'false'."
+            final_prompt = "Is the above answer given by the other AI true or false? Answer only with the single word 'true' or 'false'."
         else:
             final_prompt = "Is the above answer true or false? Answer only with the single word 'true' or 'false'."
 
