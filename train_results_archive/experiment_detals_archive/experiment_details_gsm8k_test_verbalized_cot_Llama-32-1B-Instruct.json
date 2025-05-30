@@ -1,0 +1,13 @@
+{
+  "model": "meta-llama/Llama-3.2-1B-Instruct",
+  "safe_model_name": "Llama-32-1B-Instruct",
+  "dataset": "gsm8k",
+  "split": "test",
+  "experiment_type": "verbalized_cot",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "port": 8000,
+  "workers": 32,
+  "timestamp": "2025-05-29 21:20:20",
+  "model_info": "meta-llama/Llama-3.2-1B-Instruct"
+}
