@@ -1,0 +1,13 @@
+{
+  "model": "deepseek-ai/deepseek-math-7b-rl",
+  "safe_model_name": "deepseek-math-7b-rl",
+  "dataset": "simpleqa",
+  "split": "test",
+  "experiment_type": "cot_exp",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "port": 8000,
+  "workers": 20,
+  "timestamp": "2025-05-30 15:35:01",
+  "model_info": "deepseek-ai/deepseek-math-7b-rl"
+}

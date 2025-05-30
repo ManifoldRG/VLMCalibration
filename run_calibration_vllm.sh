@@ -2,18 +2,20 @@
 
 # Define models to test (placeholders for now)
 models=(
-    # "meta-llama/Llama-3.2-1B-Instruct"
-    # "meta-llama/Llama-3.2-3B-Instruct" 
-    # "meta-llama/Llama-3.1-8B-Instruct"
-    # "allenai/OLMo-2-1124-7B-Instruct"
-    # "Qwen/Qwen2.5-14B-Instruct"
-    # "allenai/OLMo-2-1124-13B-Instruct"
-    # GEMMA NEEDS NO SYSTEM PROMPT - eval later
+    "meta-llama/Llama-3.2-1B-Instruct"
+    "meta-llama/Llama-3.2-3B-Instruct" 
+    "meta-llama/Llama-3.1-8B-Instruct"
     "google/gemma-2-2b-it"
+    "Qwen/Qwen2.5-14B-Instruct"
+    "allenai/OLMo-2-1124-7B-Instruct"
+    "allenai/OLMo-2-1124-13B-Instruct"
+    # GEMMA NEEDS NO SYSTEM PROMPT - eval later
     "google/gemma-2-9b-it"
-    # "Qwen/Qwen2.5-0.5B-Instruct"
-    # "Qwen/Qwen2.5-3B-Instruct"
-    # "Qwen/Qwen2.5-7B-Instruct"
+    "Qwen/Qwen2.5-0.5B-Instruct"
+    "Qwen/Qwen2.5-3B-Instruct"
+    "Qwen/Qwen2.5-7B-Instruct"
+    "deepseek-ai/deepseek-math-7b-rl"
+    "deepseek-ai/deepseek-math-7b-instruct"
 )
 
 # Define permitted combinations based on local_unified_calib_vllm.py
@@ -22,9 +24,10 @@ permitted_combinations["gsm8k"]="test"
 permitted_combinations["mmlu"]="test"
 permitted_combinations["medmcqa"]="validation"
 permitted_combinations["simpleqa"]="test"
+# permitted_combinations["truthfulqa"]="validation"
 
-datasets=("gsm8k" "mmlu" "medmcqa" "simpleqa")
-exps=("verbalized" "verbalized_cot")
+datasets=("gsm8k" "mmlu" "medmcqa" "simpleqa" )
+exps=("cot_exp" "zs_exp" "verbalized" "verbalized_cot" "otherAI" "otherAI_cot")
 
 # Function to extract parameter size from model name and determine workers
 get_workers_for_model() {
