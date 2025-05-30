@@ -62,6 +62,8 @@ def format_question(task):
 
         if dataset_type == "simpleqa":
             question = dataset[dataset_split][idx]["problem"]
+        elif dataset_type == "truthfulqa":
+            question = dataset[dataset_split][idx]["question"]
         else:
             question = dataset[dataset_split][idx]["question"]
 
@@ -81,6 +83,8 @@ def format_question(task):
             question_str = format_medmcqa_question(question, choices_list)
         elif dataset_type == "simpleqa":
             question_str = format_simpleqa_question(question)
+        elif dataset_type == "truthfulqa":
+            question_str = format_truthfulqa_question(question)
         else:
             raise ValueError(f"Unknown dataset type: {dataset_type}")
 
@@ -322,6 +326,8 @@ def finalize_result(task):
             answer = parse_medmcqa_answer(response_text)
         elif dataset_type == "simpleqa":
             answer = parse_simpleqa_answer(response_text)
+        elif dataset_type == "truthfulqa":
+            answer = parse_truthfulqa_answer(response_text)
 
         # Calculate confidence/probability based on experiment type
         if exp_type in ["verbalized", "verbalized_cot"]:
@@ -367,6 +373,11 @@ def finalize_result(task):
         elif dataset_type == "simpleqa":
             true_answer = dataset[dataset_split][idx]["answer"]
             is_correct = validate_simpleqa_answer(task["question"], answer, true_answer, client=client)
+        elif dataset_type == "truthfulqa":
+            correct_answers = dataset[dataset_split][idx]["correct_answers"]
+            incorrect_answers = dataset[dataset_split][idx]["incorrect_answers"]
+            true_answer = dataset[dataset_split][idx]["best_answer"]  # Store best answer for reference
+            is_correct = validate_truthfulqa_answer(task["question"], answer, correct_answers, incorrect_answers, client=client)
 
         # Build result dictionary
         result = {
@@ -444,7 +455,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--dataset",
-        choices=["gsm8k", "mmlu", "medmcqa", "simpleqa"],
+        choices=["gsm8k", "mmlu", "medmcqa", "simpleqa", "truthfulqa"],
         help="Dataset to use",
         required=True,
     )
@@ -478,7 +489,8 @@ if __name__ == "__main__":
         ("gsm8k", "test"),
         ("medmcqa", "validation"),
         ("mmlu", "test"),
-        ("simpleqa", "test")
+        ("simpleqa", "test"),
+        ("truthfulqa", "validation")
     }
     
     if (args.dataset, args.split) not in allowed_combinations:
@@ -499,6 +511,8 @@ if __name__ == "__main__":
         dataset = load_dataset("openlifescienceai/medmcqa", "default")
     elif args.dataset == "simpleqa":
         dataset = load_dataset("basicv8vc/SimpleQA")
+    elif args.dataset == "truthfulqa":
+        dataset = load_dataset("truthful_qa", "generation")
 
     if args.split not in dataset:
         raise ValueError(
@@ -517,7 +531,7 @@ if __name__ == "__main__":
     end_idx = len(dataset[dataset_split])
     
     # Use pre-created index files for consistent sampling across experiments
-    datasets_needing_sampling = {"medmcqa", "mmlu", "simpleqa"}
+    datasets_needing_sampling = {"medmcqa", "mmlu", "simpleqa", "truthfulqa"}
     
     if args.dataset in datasets_needing_sampling:
         # Try to load pre-created index file
