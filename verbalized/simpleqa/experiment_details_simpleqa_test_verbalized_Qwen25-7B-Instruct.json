@@ -1,0 +1,13 @@
+{
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "safe_model_name": "Qwen25-7B-Instruct",
+  "dataset": "simpleqa",
+  "split": "test",
+  "experiment_type": "verbalized",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "port": 8000,
+  "workers": 28,
+  "timestamp": "2025-05-31 03:47:45",
+  "model_info": "Qwen/Qwen2.5-7B-Instruct"
+}
