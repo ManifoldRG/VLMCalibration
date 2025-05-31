@@ -2,11 +2,11 @@
 """
 simpleqa_analysis.py
 
-Analyze SimpleQA dataset by extracting questions and plotting ECE vs frequency
-of text in OLMO training data (pretraining, mid-training, post-training).
+Analyze SimpleQA dataset by extracting questions and plotting model confidence (p_true)
+vs frequency of concepts in OLMO training data (pretraining and post-training).
 
 Usage:
-    python simpleqa_analysis.py --input simpleqa_records.json --output analysis_results.png
+    python simpleqa_analysis.py --input simpleqa_records.json --output p_true_vs_frequency.png
 """
 
 import argparse
@@ -23,6 +23,7 @@ import traceback
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
+import scipy.stats as stats
 
 # Add infini-gram package imports
 from infini_gram.engine import InfiniGramEngine
@@ -113,28 +114,37 @@ def generate_semantic_variations_with_gpt4o(concept: str, api_key: str = None) -
                 {
                     "role": "system", 
                     "content": """
-                    You are given a concept phrase. Generate 8-10 semantic variations of this EXACT SAME concept that would be likely to appear in text corpora, while preserving the EXACT specificity and meaning.
+                    You are given a concept phrase. Generate 8-10 semantic variations of this concept that would be likely to appear in text corpora, while preserving the core meaning and specificity.
 
-                    CRITICAL: Keep the concept very specific and the same. Do NOT generalize or make it broader.
+                    CRITICAL: Keep the concept specific and meaningful. Do NOT make it overly general or broad.
+                    CRITICAL: Do NOT generate individual words or very partial phrases from the concept.
+                    CRITICAL: Each variation should refer to the same core concept, but can have slightly different levels of detail.
 
                     Think about:
-                    - Different phrasings of the EXACT same concept (same specificity level)
-                    - Different word orders of the same specific information
-                    - Alternative ways to express the same specific details
-                    - Preserve ALL key identifying information (names, dates, locations, etc.)
+                    - Different phrasings of the same concept
+                    - Different word orders of the same information
+                    - Alternative ways to express the same details
+                    - Preserve key identifying information (names, dates, locations, etc.) but allow some flexibility
                     - Different grammatical structures for the same concept
-                    - How the same specific concept might appear in different text styles
+                    - How the same concept might appear in different text styles
+                    - Slightly shorter or longer versions that maintain the core meaning
+
+                    You CAN:
+                    - Create variations with slightly less specific details if they still clearly refer to the same concept
+                    - Reorder or rephrase while maintaining the essential meaning
+                    - Add common descriptive words that don't change the core concept
 
                     DO NOT:
-                    - Make the concept more general or broader
-                    - Remove specific details like names, dates, or locations
-                    - Create variations that could refer to different concepts
+                    - Make the concept completely general or lose its essential meaning
+                    - Generate individual words or very short partial phrases
+                    - Create variations that could refer to completely different concepts
+                    - Remove all specific identifying information
 
-                    Return ONLY a JSON list of strings, with no other text. Each variation should be 2-8 words and maintain the same specificity.
+                    Return ONLY a JSON list of strings, with no other text. Each variation should maintain the core concept meaning.
 
                     Example:
                     Input: "eclipse August 28 1802"
-                    Output: ["eclipse August 28 1802", "August 28 1802 eclipse", "solar eclipse August 28 1802", "lunar eclipse August 28 1802", "eclipse on August 28 1802", "August 28th 1802 eclipse", "1802 August 28 eclipse", "eclipse of August 28 1802", "28 August 1802 eclipse", "eclipse August 28th 1802"]
+                    Output: ["eclipse August 28 1802", "August 28 1802 eclipse", "eclipse on August 28 1802", "eclipse August 28th 1802", "1802 August 28 eclipse", "eclipse of August 28 1802", "28 August 1802 eclipse", "eclipse on August 28", "August 28 eclipse", "solar eclipse August 28 1802"]
                     """
                 },
                 {
@@ -184,7 +194,6 @@ def count_ngram_with_document_focus(index: str, text: str) -> Dict[str, Any]:
                 all_variations.append(var)
     
     print(f"Total variations to try: {len(all_variations)}")
-    
     # Check if this is the post_training index (use local package)
     if index == OLMO_INDEXES["post_training"]:
         try:
@@ -348,7 +357,7 @@ def count_ngram_with_document_focus(index: str, text: str) -> Dict[str, Any]:
                 "error": str(e)
             }
     
-    # Use API for other indexes (pretraining) - try to get document information
+    # Use API for other indexes (pretraining) - try to get both document and n-gram counts
     else:
         best_result = {
             "doc_count": 0,
@@ -358,7 +367,8 @@ def count_ngram_with_document_focus(index: str, text: str) -> Dict[str, Any]:
             "tokens": [],
             "best_match": text,
             "all_variations": {},
-            "semantic_variations": semantic_variations
+            "semantic_variations": semantic_variations,
+            "documents": []
         }
         
         # Try each variation with API - focus on getting document counts when possible
@@ -368,12 +378,19 @@ def count_ngram_with_document_focus(index: str, text: str) -> Dict[str, Any]:
                 find_payload = {"index": index, "query_type": "find", "query": variation}
                 find_result = None
                 doc_count = 0
+                documents = []
                 
                 try:
                     find_result = post_request(find_payload)
                     if "error" not in find_result:
                         doc_count = int(find_result.get("cnt", 0))
                         print(f"API find for '{variation}': {doc_count} documents")
+                        
+                        # If we found documents, try to retrieve some samples
+                        if doc_count > 0:
+                            print(f"Retrieving document samples for '{variation}'...")
+                            documents = get_document_samples_from_api(index, find_result, max_docs=3)
+                            
                 except Exception as e:
                     print(f"API find query failed for '{variation}': {e}")
                     # Fallback to count query
@@ -393,7 +410,8 @@ def count_ngram_with_document_focus(index: str, text: str) -> Dict[str, Any]:
                         "approx": count_result.get("approx", False),
                         "token_ids": count_result.get("token_ids", []),
                         "tokens": count_result.get("tokens", []),
-                        "latency": count_result.get("latency", 0.0)
+                        "latency": count_result.get("latency", 0.0),
+                        "documents": documents
                     }
                     
                     # If find query worked, use those results
@@ -425,10 +443,19 @@ def count_ngram_with_document_focus(index: str, text: str) -> Dict[str, Any]:
                 # Try find query for documents
                 find_payload = {"index": index, "query_type": "find", "query": cnf_query}
                 doc_count = 0
+                cnf_documents = []
+                find_result = None
+                
                 try:
                     find_result = post_request(find_payload)
                     if "error" not in find_result:
                         doc_count = int(find_result.get("cnt", 0))
+                        
+                        # If we found documents, try to retrieve some samples
+                        if doc_count > 0:
+                            print(f"Retrieving CNF document samples...")
+                            cnf_documents = get_document_samples_from_api(index, find_result, max_docs=3)
+                            
                 except Exception as e:
                     print(f"API CNF find query failed: {e}")
                 
@@ -450,6 +477,7 @@ def count_ngram_with_document_focus(index: str, text: str) -> Dict[str, Any]:
                         best_result["latency"] = count_result.get("latency", 0.0)
                         best_result["cnf_query"] = True
                         best_result["cnf_variations"] = top_variations
+                        best_result["documents"] = cnf_documents
                         
             except Exception as e:
                 print(f"Error with API CNF query: {e}")
@@ -548,6 +576,97 @@ def post_request(payload: Dict[str, Any], retries: int = 3, backoff: float = 0.5
                 raise
             time.sleep(backoff * (2 ** attempt))
     return {}
+
+def get_document_samples_from_api(index: str, find_result: Dict, max_docs: int = 3, max_disp_len: int = 200) -> List[Dict[str, Any]]:
+    """
+    Retrieve actual document text samples from API using get_doc_by_rank.
+    
+    Args:
+        index: The index to search in
+        find_result: Result from a 'find' query containing segment_by_shard
+        max_docs: Maximum number of document samples to retrieve
+        max_disp_len: Maximum number of tokens per document
+    
+    Returns:
+        List of document dictionaries with text samples
+    """
+    documents = []
+    doc_count = 0
+    
+    try:
+        segments = find_result.get('segment_by_shard', [])
+        if not segments:
+            print("No segments found in find_result")
+            return documents
+            
+        for s, (start, end) in enumerate(segments):
+            if doc_count >= max_docs:
+                break
+                
+            # Try to get a few documents from this shard
+            shard_docs_retrieved = 0
+            max_per_shard = min(max_docs - doc_count, 2)  # Limit per shard
+            
+            for rank in range(start, min(end, start + max_per_shard)):
+                if doc_count >= max_docs:
+                    break
+                    
+                try:
+                    # Make API call to get document by rank
+                    doc_payload = {
+                        "index": index,
+                        "query_type": "get_doc_by_rank",
+                        "s": s,
+                        "rank": rank,
+                        "max_disp_len": max_disp_len
+                    }
+                    
+                    doc_result = post_request(doc_payload)
+                    
+                    if "error" not in doc_result:
+                        # Extract text from token_ids
+                        token_ids = doc_result.get("token_ids", [])
+                        text_sample = ""
+                        
+                        # For API results, we don't have a tokenizer, so use the tokens field if available
+                        if "tokens" in doc_result:
+                            text_sample = "".join(doc_result["tokens"])
+                        elif token_ids:
+                            # Fallback: represent as token ID string if we can't decode
+                            text_sample = f"[Token IDs: {token_ids[:20]}...]" if len(token_ids) > 20 else f"[Token IDs: {token_ids}]"
+                        
+                        documents.append({
+                            "shard": s,
+                            "rank": rank,
+                            "doc_ix": doc_result.get("doc_ix"),
+                            "doc_len": doc_result.get("doc_len"),
+                            "disp_len": doc_result.get("disp_len"),
+                            "token_ids": token_ids[:50],  # Limit to first 50 tokens
+                            "text_sample": text_sample[:500],  # Limit text length
+                            "latency": doc_result.get("latency", 0.0)
+                        })
+                        doc_count += 1
+                        shard_docs_retrieved += 1
+                        
+                        print(f"Retrieved document from shard {s}, rank {rank}: {len(text_sample)} chars")
+                    else:
+                        print(f"Error retrieving document shard {s}, rank {rank}: {doc_result.get('error', 'Unknown error')}")
+                        
+                except Exception as e:
+                    print(f"Exception retrieving document shard {s}, rank {rank}: {e}")
+                    continue
+                    
+                # Add small delay between document retrievals
+                time.sleep(0.05)
+            
+            if doc_count >= max_docs:
+                break
+                
+    except Exception as e:
+        print(f"Error in get_document_samples_from_api: {e}")
+    
+    print(f"Retrieved {len(documents)} document samples from API")
+    return documents
 
 def count_ngram(index: str, text: str) -> Dict[str, Any]:
     """Count document occurrences and n-gram occurrences of text in the specified index."""
@@ -674,12 +793,19 @@ def count_ngram(index: str, text: str) -> Dict[str, Any]:
             find_payload = {"index": index, "query_type": "find", "query": text}
             doc_count = 0
             find_result = None
+            documents = []
             
             try:
                 find_result = post_request(find_payload)
                 if "error" not in find_result:
                     doc_count = int(find_result.get("cnt", 0))
                     print(f"API find result: {doc_count} documents")
+                    
+                    # If we found documents, try to retrieve some samples
+                    if doc_count > 0:
+                        print(f"Retrieving document samples...")
+                        documents = get_document_samples_from_api(index, find_result, max_docs=5)
+                        
             except Exception as e:
                 print(f"API find query failed: {e}")
             
@@ -698,6 +824,7 @@ def count_ngram(index: str, text: str) -> Dict[str, Any]:
                     "approx": False,
                     "token_ids": [],
                     "tokens": [],
+                    "documents": documents,
                     "error": count_result["error"]
                 }
                 
@@ -707,7 +834,8 @@ def count_ngram(index: str, text: str) -> Dict[str, Any]:
                 "approx": count_result.get("approx", False),
                 "token_ids": count_result.get("token_ids", []),
                 "tokens": count_result.get("tokens", []),
-                "latency": count_result.get("latency", 0.0)
+                "latency": count_result.get("latency", 0.0),
+                "documents": documents
             }
             
             # If find query worked, add those details
@@ -724,6 +852,7 @@ def count_ngram(index: str, text: str) -> Dict[str, Any]:
                 "approx": False,
                 "token_ids": [],
                 "tokens": [],
+                "documents": [],
                 "error": str(e)
             }
 
@@ -736,33 +865,14 @@ def get_frequency_counts(question: str) -> Dict[str, Any]:
         time.sleep(0.1)  # Rate limiting
     return results
 
-def calculate_ece(confidences: List[float], correct_flags: List[bool], n_bins: int = 10) -> float:
-    """Calculate Expected Calibration Error."""
-    bin_boundaries = np.linspace(0, 1, n_bins + 1)
-    bin_lowers = bin_boundaries[:-1]
-    bin_uppers = bin_boundaries[1:]
-    
-    ece = 0
-    for bin_lower, bin_upper in zip(bin_lowers, bin_uppers):
-        # Determine if sample is in bin
-        in_bin = (confidences > bin_lower) & (confidences <= bin_upper)
-        prop_in_bin = in_bin.mean()
-        
-        if prop_in_bin > 0:
-            accuracy_in_bin = correct_flags[in_bin].mean()
-            avg_confidence_in_bin = confidences[in_bin].mean()
-            ece += np.abs(avg_confidence_in_bin - accuracy_in_bin) * prop_in_bin
-    
-    return ece
-
 def analyze_data(input_file: str) -> Tuple[Dict, List]:
-    """Analyze the SimpleQA data and return frequency bins and ECE data."""
+    """Analyze the SimpleQA data and return p_true vs frequency data."""
     print(f"Loading data from {input_file}...")
     
     with open(input_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
-    data = data[:1]
+    data = data[:5]
     # Process all records in the dataset
     print(f"Processing {len(data)} records from {input_file}")
     
@@ -791,29 +901,7 @@ def analyze_data(input_file: str) -> Tuple[Dict, List]:
         for stage, result in freq_results.items():
             count = result.get("doc_count", 0)
             best_match = result.get("best_match", concept)
-            all_variations = result.get("all_variations", {})
-            
-            print(f"  {stage}: {count} docs")
-            print(f"    Best match: '{best_match}'")
-            if all_variations:
-                print(f"    All variations tried:")
-                for var, var_result in all_variations.items():
-                    var_count = var_result.get("doc_count", 0)
-                    print(f"      '{var}': {var_count} docs")
-            
-            # If we have documents, show a sample
-            documents = result.get("documents", [])
-            if documents:
-                print(f"    Sample documents ({len(documents)} shown):")
-                for j, doc in enumerate(documents[:2]):  # Show first 2
-                    sample = doc.get("text_sample", "")[:100] + "..." if len(doc.get("text_sample", "")) > 100 else doc.get("text_sample", "")
-                    print(f"      {j+1}. {sample}")
-        
-        print(f"\nFinal frequency counts:")
-        for stage, result in freq_results.items():
-            count = result.get("doc_count", 0)
-            match_used = result.get("best_match", concept)
-            print(f"  {stage}: {count} docs (using: {match_used})")
+            print(f"  {stage}: {count} docs (using: {best_match})")
         
         # Store result
         result = {
@@ -822,8 +910,9 @@ def analyze_data(input_file: str) -> Tuple[Dict, List]:
             "concept": concept,
             "p_true": record["p_true"],
             "correct": record["correct"],
-            "frequency_results": freq_results,
-            "frequency_counts": {stage: data.get("doc_count", 0) for stage, data in freq_results.items()}
+            "pretraining_freq": freq_results.get("pretraining", {}).get("doc_count", 0),
+            "posttraining_freq": freq_results.get("post_training", {}).get("doc_count", 0),
+            "combined_freq": freq_results.get("pretraining", {}).get("doc_count", 0) + freq_results.get("post_training", {}).get("doc_count", 0)
         }
         results.append(result)
         
@@ -839,220 +928,101 @@ def analyze_data(input_file: str) -> Tuple[Dict, List]:
     
     for i, result in enumerate(results):
         print(f"Record {i+1}: {result['concept']}")
-        for stage, count in result['frequency_counts'].items():
-            # Also show n-gram counts for reference
-            freq_result = result['frequency_results'][stage]
-            ngram_count = freq_result.get('ngram_count', 0)
-            print(f"  {stage}: {count} docs ({ngram_count} n-grams)")
+        print(f"  p_true: {result['p_true']:.3f}")
+        print(f"  pretraining_freq: {result['pretraining_freq']}")
+        print(f"  posttraining_freq: {result['posttraining_freq']}")
+        print(f"  combined_freq: {result['combined_freq']}")
     
-    # Now proceed to binning and ECE calculation
-    print(f"\nProceeding to document frequency binning and ECE calculation...")
-    
-    # Create frequency bins for each training stage based on document counts
-    analysis_results = {}
-    
-    for stage in OLMO_INDEXES.keys():
-        print(f"\nProcessing {stage} stage...")
-        
-        # Extract data for this stage using document counts
-        stage_data = []
-        for result in results:
-            doc_count = result['frequency_counts'].get(stage, 0)
-            if doc_count > 0:  # Only include non-zero document frequencies
-                stage_data.append({
-                    'frequency': doc_count,
-                    'p_true': result['p_true'],
-                    'correct': result['correct']
-                })
-        
-        if not stage_data:
-            print(f"  No data with non-zero document frequencies for {stage}")
-            analysis_results[stage] = []
-            continue
-        
-        print(f"  {len(stage_data)} samples with non-zero document frequencies")
-        
-        # Sort by frequency for binning
-        stage_data.sort(key=lambda x: x['frequency'])
-        
-        # Create frequency bins (logarithmic binning for better distribution)
-        frequencies = [d['frequency'] for d in stage_data]
-        min_freq = min(frequencies)
-        max_freq = max(frequencies)
-        
-        if min_freq == max_freq:
-            # All frequencies are the same, create single bin
-            n_bins = 1
-            bin_edges = [min_freq - 0.5, max_freq + 0.5]
-        else:
-            # Use 5 bins or fewer if we don't have enough data
-            n_bins = min(5, len(stage_data) // 2)  # At least 2 samples per bin
-            n_bins = max(1, n_bins)  # At least 1 bin
-            
-            # Create logarithmic bins
-            if min_freq > 0:
-                bin_edges = np.logspace(np.log10(min_freq), np.log10(max_freq), n_bins + 1)
-            else:
-                # Handle case where min_freq is 0
-                bin_edges = np.linspace(min_freq, max_freq, n_bins + 1)
-        
-        print(f"  Creating {n_bins} bins with edges: {bin_edges}")
-        
-        # Assign data to bins and calculate ECE for each bin
-        bin_results = []
-        
-        for i in range(n_bins):
-            bin_lower = bin_edges[i]
-            bin_upper = bin_edges[i + 1]
-            
-            # Find samples in this bin
-            bin_samples = []
-            for sample in stage_data:
-                freq = sample['frequency']
-                if i == n_bins - 1:  # Last bin includes upper edge
-                    if bin_lower <= freq <= bin_upper:
-                        bin_samples.append(sample)
-                else:
-                    if bin_lower <= freq < bin_upper:
-                        bin_samples.append(sample)
-            
-            if not bin_samples:
-                continue
-            
-            # Calculate statistics for this bin
-            bin_frequencies = [s['frequency'] for s in bin_samples]
-            bin_confidences = np.array([s['p_true'] for s in bin_samples])
-            bin_correct = np.array([s['correct'] for s in bin_samples])
-            
-            # Calculate ECE for this bin
-            if len(bin_samples) > 1:
-                bin_ece = calculate_ece(bin_confidences, bin_correct, n_bins=min(5, len(bin_samples)))
-            else:
-                # For single sample, ECE is just |confidence - accuracy|
-                bin_ece = abs(bin_confidences[0] - bin_correct[0])
-            
-            avg_frequency = np.mean(bin_frequencies)
-            avg_confidence = np.mean(bin_confidences)
-            accuracy = np.mean(bin_correct)
-            
-            bin_result = {
-                "bin_id": i,
-                "frequency_range": [bin_lower, bin_upper],
-                "avg_frequency": avg_frequency,
-                "count": len(bin_samples),
-                "ece": bin_ece,
-                "avg_confidence": avg_confidence,
-                "accuracy": accuracy,
-                "calibration_error": abs(avg_confidence - accuracy)
-            }
-            
-            bin_results.append(bin_result)
-            
-            print(f"    Bin {i+1}: doc_freq=[{bin_lower:.1f}, {bin_upper:.1f}], "
-                  f"n={len(bin_samples)}, avg_doc_freq={avg_frequency:.1f}, "
-                  f"ECE={bin_ece:.4f}, conf={avg_confidence:.3f}, acc={accuracy:.3f}")
-        
-        analysis_results[stage] = bin_results
-    
-    return analysis_results, results
+    return {}, results  # Return empty dict for analysis_results since we're not doing binning
 
-def plot_results(analysis_results: Dict, output_file: str):
-    """Plot ECE histogram from p_true with frequency bins for pretraining and posttraining."""
+def plot_results(analysis_results: Dict, raw_results: List, output_file: str):
+    """Plot p_true vs combined frequency (pretraining + post-training)."""
     
-    # Prepare data for histogram
-    pretraining_data = analysis_results.get('pretraining', [])
-    posttraining_data = analysis_results.get('post_training', [])
-    
-    if not pretraining_data and not posttraining_data:
+    if not raw_results:
         print("No data available for plotting")
         return
     
-    # Create figure with subplots
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+    # Extract data for plotting
+    p_true_values = [r["p_true"] for r in raw_results]
+    combined_freqs = [r["combined_freq"] for r in raw_results]
+    concepts = [r["concept"] for r in raw_results]
     
-    # Plot 1: ECE Histogram for Pretraining
-    if pretraining_data:
-        ece_values = [d["ece"] for d in pretraining_data]
-        frequencies = [d["avg_frequency"] for d in pretraining_data]
-        counts = [d["count"] for d in pretraining_data]
-        
-        # Create histogram bars
-        bins = range(len(ece_values))
-        bars1 = ax1.bar(bins, ece_values, color='blue', alpha=0.7, 
-                       label=f'Pretraining ({len(ece_values)} bins)')
-        
-        # Add frequency labels on x-axis
-        ax1.set_xticks(bins)
-        ax1.set_xticklabels([f'{int(f)}' for f in frequencies], rotation=45, ha='right')
-        ax1.set_xlabel('Document Frequency in Training Data')
-        ax1.set_ylabel('Expected Calibration Error (ECE)')
-        ax1.set_title('ECE from p_true - Pretraining Data')
-        ax1.grid(True, alpha=0.3, axis='y')
-        
-        # Add count labels on top of bars
-        for i, (bar, count, ece) in enumerate(zip(bars1, counts, ece_values)):
-            ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
-                    f'n={count}\nECE={ece:.3f}', 
-                    ha='center', va='bottom', fontsize=8)
-    else:
-        ax1.text(0.5, 0.5, 'No pretraining data available', 
-                ha='center', va='center', transform=ax1.transAxes, fontsize=12)
-        ax1.set_title('ECE from p_true - Pretraining Data')
+    # Create single plot
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
     
-    # Plot 2: ECE Histogram for Post-training
-    if posttraining_data:
-        ece_values = [d["ece"] for d in posttraining_data]
-        frequencies = [d["avg_frequency"] for d in posttraining_data]
-        counts = [d["count"] for d in posttraining_data]
-        
-        # Create histogram bars
-        bins = range(len(ece_values))
-        bars2 = ax2.bar(bins, ece_values, color='orange', alpha=0.7,
-                       label=f'Post-training ({len(ece_values)} bins)')
-        
-        # Add frequency labels on x-axis
-        ax2.set_xticks(bins)
-        ax2.set_xticklabels([f'{int(f)}' for f in frequencies], rotation=45, ha='right')
-        ax2.set_xlabel('Document Frequency in Training Data')
-        ax2.set_ylabel('Expected Calibration Error (ECE)')
-        ax2.set_title('ECE from p_true - Post-training Data')
-        ax2.grid(True, alpha=0.3, axis='y')
-        
-        # Add count labels on top of bars
-        for i, (bar, count, ece) in enumerate(zip(bars2, counts, ece_values)):
-            ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
-                    f'n={count}\nECE={ece:.3f}', 
-                    ha='center', va='bottom', fontsize=8)
-    else:
-        ax2.text(0.5, 0.5, 'No post-training data available', 
-                ha='center', va='center', transform=ax2.transAxes, fontsize=12)
-        ax2.set_title('ECE from p_true - Post-training Data')
+    # Plot p_true vs Combined Frequency
+    scatter = ax.scatter(combined_freqs, p_true_values, alpha=0.7, color='purple', s=60)
+    ax.set_xlabel('Combined Document Frequency (Pretraining + Post-training)')
+    ax.set_ylabel('p_true (Model Confidence)')
+    ax.set_title('Model Confidence vs Combined Training Data Frequency')
+    ax.grid(True, alpha=0.3)
+    
+    # Add trend line
+    if len(combined_freqs) > 1:
+        # Filter out zero frequencies for correlation if needed
+        non_zero_combined = [(f, p) for f, p in zip(combined_freqs, p_true_values) if f > 0]
+        if non_zero_combined and len(non_zero_combined) > 1:
+            freqs_nz, p_true_nz = zip(*non_zero_combined)
+            z = np.polyfit(freqs_nz, p_true_nz, 1)
+            p = np.poly1d(z)
+            x_trend = np.linspace(min(freqs_nz), max(freqs_nz), 100)
+            ax.plot(x_trend, p(x_trend), "r--", alpha=0.8, linewidth=2, 
+                   label=f'Trend: y={z[0]:.4f}x+{z[1]:.3f}')
+            ax.legend()
+        # If we have data but all frequencies are zero, fit trend line including zeros
+        elif len(set(combined_freqs)) > 1:  # More than one unique frequency value
+            z = np.polyfit(combined_freqs, p_true_values, 1)
+            p = np.poly1d(z)
+            x_trend = np.linspace(min(combined_freqs), max(combined_freqs), 100)
+            ax.plot(x_trend, p(x_trend), "r--", alpha=0.8, linewidth=2,
+                   label=f'Trend: y={z[0]:.4f}x+{z[1]:.3f}')
+            ax.legend()
+    
+    # Set log scale if frequencies span wide range
+    if max(combined_freqs) > 0 and max(combined_freqs) > 10 * min([f for f in combined_freqs if f > 0], default=1):
+        ax.set_xscale('log')
+    
+    # Add text annotations for interesting points (optional)
+    for i, (freq, conf, concept) in enumerate(zip(combined_freqs, p_true_values, concepts)):
+        # Annotate points with very high frequency or very high/low confidence
+        if freq > max(combined_freqs) * 0.8 or conf > 0.95 or conf < 0.1:
+            ax.annotate(concept[:30] + "..." if len(concept) > 30 else concept, 
+                       (freq, conf), xytext=(5, 5), textcoords='offset points',
+                       fontsize=8, alpha=0.7)
     
     # Add overall title
-    total_bins = len(pretraining_data) + len(posttraining_data)
-    fig.suptitle(f'ECE (from p_true) Histogram by Document Frequency\n'
-                f'Total: {total_bins} frequency bins', fontsize=14, y=0.98)
+    fig.suptitle(f'Model Confidence (p_true) vs Combined Training Data Frequency\n'
+                f'Total: {len(raw_results)} questions', fontsize=14, y=0.95)
     
     plt.tight_layout()
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
-    print(f"ECE histogram saved to {output_file}")
+    print(f"Confidence vs combined frequency plot saved to {output_file}")
     
     # Print summary statistics
-    print(f"\nHistogram Summary:")
-    if pretraining_data:
-        pre_avg_ece = np.mean([d["ece"] for d in pretraining_data])
-        pre_total_samples = sum([d["count"] for d in pretraining_data])
-        print(f"Pretraining: {len(pretraining_data)} bins, avg ECE = {pre_avg_ece:.4f}, total samples = {pre_total_samples}")
+    print(f"\nPlot Summary:")
+    print(f"Total questions: {len(raw_results)}")
+    print(f"p_true range: [{min(p_true_values):.3f}, {max(p_true_values):.3f}]")
+    print(f"Combined frequency range: [{min(combined_freqs)}, {max(combined_freqs)}]")
     
-    if posttraining_data:
-        post_avg_ece = np.mean([d["ece"] for d in posttraining_data])
-        post_total_samples = sum([d["count"] for d in posttraining_data])
-        print(f"Post-training: {len(posttraining_data)} bins, avg ECE = {post_avg_ece:.4f}, total samples = {post_total_samples}")
+    # Calculate correlation for combined frequency
+    if len(set(combined_freqs)) > 1:  # More than one unique frequency value
+        corr_combined, p_val_combined = stats.pearsonr(combined_freqs, p_true_values)
+        print(f"Combined frequency correlation: r={corr_combined:.4f}, p={p_val_combined:.4f}")
+        
+        # Also calculate correlation excluding zero frequencies
+        non_zero_indices = [i for i, f in enumerate(combined_freqs) if f > 0]
+        if len(non_zero_indices) > 1:
+            combined_freqs_nz = [combined_freqs[i] for i in non_zero_indices]
+            p_true_nz = [p_true_values[i] for i in non_zero_indices]
+            corr_nz, p_val_nz = stats.pearsonr(combined_freqs_nz, p_true_nz)
+            print(f"Non-zero frequency correlation: r={corr_nz:.4f}, p={p_val_nz:.4f}")
+    else:
+        print("Not enough frequency variation for correlation analysis")
 
 def main():
-    parser = argparse.ArgumentParser(description="Analyze SimpleQA data with infini-gram document frequency analysis")
+    parser = argparse.ArgumentParser(description="Analyze SimpleQA data: plot p_true vs document frequency in training data")
     parser.add_argument("--input", required=True, help="Input SimpleQA JSON file")
-    parser.add_argument("--output", default="ece_vs_document_frequency.png", help="Output plot file")
+    parser.add_argument("--output", default="p_true_vs_frequency.png", help="Output plot file")
     parser.add_argument("--save-results", help="Save analysis results to JSON file")
     
     args = parser.parse_args()
@@ -1070,14 +1040,20 @@ def main():
         print(f"Results saved to {args.save_results}")
     
     # Plot results
-    plot_results(analysis_results, args.output)
+    plot_results(analysis_results, raw_results, args.output)
     
     # Print summary
     print("\nSummary:")
-    for stage, data in analysis_results.items():
-        if data:
-            avg_ece = np.mean([d["ece"] for d in data])
-            print(f"{stage.replace('_', ' ').title()}: {len(data)} bins, avg ECE = {avg_ece:.4f}")
+    print(f"Processed {len(raw_results)} questions")
+    if raw_results:
+        avg_p_true = np.mean([r["p_true"] for r in raw_results])
+        avg_pre_freq = np.mean([r["pretraining_freq"] for r in raw_results])
+        avg_post_freq = np.mean([r["posttraining_freq"] for r in raw_results])
+        avg_combined_freq = np.mean([r["combined_freq"] for r in raw_results])
+        print(f"Average p_true: {avg_p_true:.4f}")
+        print(f"Average pretraining frequency: {avg_pre_freq:.1f}")
+        print(f"Average post-training frequency: {avg_post_freq:.1f}")
+        print(f"Average combined frequency: {avg_combined_freq:.1f}")
 
 if __name__ == "__main__":
     main() 
