@@ -1,0 +1,13 @@
+{
+  "model": "allenai/OLMo-2-1124-7B-Instruct",
+  "safe_model_name": "OLMo-2-1124-7B-Instruct",
+  "dataset": "truthfulqa",
+  "split": "validation",
+  "experiment_type": "otherAI",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "port": 8000,
+  "workers": 28,
+  "timestamp": "2025-05-31 06:54:53",
+  "model_info": "allenai/OLMo-2-1124-7B-Instruct"
+}

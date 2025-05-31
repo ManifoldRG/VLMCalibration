@@ -1,0 +1,13 @@
+{
+  "model": "deepseek-ai/deepseek-math-7b-rl",
+  "safe_model_name": "deepseek-math-7b-rl",
+  "dataset": "truthfulqa",
+  "split": "validation",
+  "experiment_type": "verbalized_cot",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "port": 8000,
+  "workers": 28,
+  "timestamp": "2025-05-31 06:20:32",
+  "model_info": "deepseek-ai/deepseek-math-7b-rl"
+}
