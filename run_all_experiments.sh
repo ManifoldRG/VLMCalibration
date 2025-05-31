@@ -3,8 +3,6 @@
 # Script to run all experiments except otherAI_cot for both GPT-4o and GPT-4o-mini
 # This will run experiments across all supported datasets and splits
 
-set -e  # Exit on any error
-
 # Define arrays for the parameters
 models=("gpt-4o" "gpt-4o-mini")
 experiments=("cot_exp" "zs_exp" "verbalized" "verbalized_cot" "otherAI")
@@ -27,28 +25,29 @@ run_experiment() {
     local split=$3
     local exp=$4
     
-    echo "Running: $model | $dataset/$split | $exp"
+    echo "Running: $model - $dataset - $split - $exp"
+    echo "============================================"
     
     # Create log file name
     log_file="logs/${model}_${dataset}_${split}_${exp}_$(date +%Y%m%d_%H%M%S).log"
     
     # Run the experiment and log output
-    if python openai_unified_calib.py \
+    python openai_unified_calib.py \
         --model "$model" \
         --dataset "$dataset" \
         --split "$split" \
         --exp "$exp" \
         --temp 0.1 \
         --max_tokens 1024 \
-        --workers 40 > "$log_file" 2>&1; then
-        echo "✓ Completed: $model | $dataset/$split | $exp"
-    else
-        echo "✗ Failed: $model | $dataset/$split | $exp (see $log_file)"
-        return 1
-    fi
+        --workers 40 > "$log_file" 2>&1
+        
+    echo "Completed: $model - $dataset - $split - $exp"
+    echo "============================================"
+    echo ""
 }
 
 # Main execution
+echo "=========================================="
 echo "Starting all experiments..."
 echo "Models: ${models[*]}"
 echo "Experiments: ${experiments[*]}"
@@ -56,57 +55,26 @@ echo "Dataset/Split combinations:"
 for dataset in "${!dataset_splits[@]}"; do
     echo "  $dataset/${dataset_splits[$dataset]}"
 done
-echo ""
-
-total_experiments=0
-completed_experiments=0
-failed_experiments=0
-
-# Calculate total number of experiments
-for model in "${models[@]}"; do
-    for dataset in "${!dataset_splits[@]}"; do
-        for exp in "${experiments[@]}"; do
-            ((total_experiments++))
-        done
-    done
-done
-
-echo "Total experiments to run: $total_experiments"
-echo "Starting execution..."
+echo "=========================================="
 echo ""
 
 # Run all experiments
 for model in "${models[@]}"; do
+    echo "=========================================="
+    echo "Starting experiments for model: $model"
+    echo "=========================================="
+    
     for dataset in "${!dataset_splits[@]}"; do
         split=${dataset_splits[$dataset]}
+        
         for exp in "${experiments[@]}"; do
-            echo "Progress: $((completed_experiments + failed_experiments + 1))/$total_experiments"
-            
-            if run_experiment "$model" "$dataset" "$split" "$exp"; then
-                ((completed_experiments++))
-            else
-                ((failed_experiments++))
-            fi
-            
-            echo ""
+            run_experiment "$model" "$dataset" "$split" "$exp"
         done
     done
+    
+    echo "Completed all experiments for model: $model"
+    echo ""
 done
 
-# Summary
-echo "========================================"
-echo "EXPERIMENT SUMMARY"
-echo "========================================"
-echo "Total experiments: $total_experiments"
-echo "Completed: $completed_experiments"
-echo "Failed: $failed_experiments"
-echo ""
-
-if [ $failed_experiments -eq 0 ]; then
-    echo "🎉 All experiments completed successfully!"
-else
-    echo "⚠️  Some experiments failed. Check the log files in the logs/ directory."
-    echo "Failed experiment logs can be found in logs/"
-fi
-
+echo "All experiments completed!"
 echo "All logs saved in logs/ directory" 

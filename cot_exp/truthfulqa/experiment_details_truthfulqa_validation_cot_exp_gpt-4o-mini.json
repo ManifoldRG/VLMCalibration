@@ -1,0 +1,11 @@
+{
+  "model": "gpt-4o-mini",
+  "safe_model_name": "gpt-4o-mini",
+  "dataset": "truthfulqa",
+  "split": "validation",
+  "experiment_type": "cot_exp",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "workers": 40,
+  "timestamp": "2025-05-31 11:30:35"
+}
