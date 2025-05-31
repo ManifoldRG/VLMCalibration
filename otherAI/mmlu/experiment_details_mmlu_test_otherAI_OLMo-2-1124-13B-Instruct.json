@@ -7,7 +7,7 @@
   "temperature": 0.1,
   "max_tokens": 1024,
   "port": 8000,
-  "workers": 20,
-  "timestamp": "2025-05-30 22:30:14",
+  "workers": 28,
+  "timestamp": "2025-05-31 00:14:14",
   "model_info": "allenai/OLMo-2-1124-13B-Instruct"
 }
