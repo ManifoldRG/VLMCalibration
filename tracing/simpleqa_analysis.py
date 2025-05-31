@@ -24,15 +24,42 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 
+# Add infini-gram package imports
+from infini_gram.engine import InfiniGramEngine
+from transformers import AutoTokenizer
+
 load_dotenv()
 
 API_URL = "https://api.infini-gram.io/"
 
 # OLMO index mappings for different training stages
 OLMO_INDEXES = {
-    "pretraining": "v4_olmo-2-1124-13b-instruct_llama",  # Full pretraining data
-    "post_training": "v4_olmo-2-1124-13b-anneal-adapt_llama",  # Post training data (except pretraining) Dolmino mix 1124
+    "pretraining": "v4_olmo-2-1124-13b-instruct_llama",  # Full pretraining data (API)
+    "post_training": "index/v4_olmo-2-1124-13b-anneal-adapt_llama",  # Post training data (local package)
 }
+
+# Global variables for tokenizer and engine
+tokenizer = None
+post_training_engine = None
+
+def initialize_local_engine():
+    """Initialize the tokenizer and local engine for post_training index."""
+    global tokenizer, post_training_engine
+    
+    if tokenizer is None:
+        print("Initializing tokenizer...")
+        tokenizer = AutoTokenizer.from_pretrained(
+            "meta-llama/Llama-2-7b-hf", 
+            add_bos_token=False, 
+            add_eos_token=False
+        )
+    
+    if post_training_engine is None:
+        print("Initializing post_training engine...")
+        post_training_engine = InfiniGramEngine(
+            index_dir=OLMO_INDEXES["post_training"], 
+            eos_token_id=tokenizer.eos_token_id
+        )
 
 def post_request(payload: Dict[str, Any], retries: int = 3, backoff: float = 0.5) -> Dict:
     """POST request with retry logic."""
@@ -118,21 +145,46 @@ def extract_concept(question: str, api_key: str = None) -> str:
 
 def count_ngram(index: str, text: str) -> int:
     """Count occurrences of text in the specified index."""
-    payload = {"index": index, "query_type": "count", "query": text}
-    print(f"Payload: {payload}")
-    try:
-        result = post_request(payload)
-        print(f"Result: {result}")
-        
-        # Check for error key first as per API documentation
-        if "error" in result:
-            print(f"API Error: {result['error']}")
-            return 0
+    
+    # Check if this is the post_training index (use local package)
+    if index == OLMO_INDEXES["post_training"]:
+        try:
+            # Initialize engine if needed
+            initialize_local_engine()
+            print("Local engine initialized")
             
-        return int(result.get("count", 0))
-    except Exception as e:
-        print(f"Exception in count_ngram: {e}")
-        return 0
+            # Tokenize the text
+            input_ids = tokenizer.encode(text)
+            print(f"Tokenized '{text}' to: {input_ids}")
+            
+            # Count using local engine
+            result = post_training_engine.count(input_ids=input_ids)
+            print(f"Local engine result: {result}")
+            
+            return int(result.get("count", 0))
+            
+        except Exception as e:
+            print(f"Exception in local count_ngram: {e}")
+            traceback.print_exc()
+            return 0
+    
+    # Use API for other indexes (pretraining)
+    else:
+        payload = {"index": index, "query_type": "count", "query": text}
+        print(f"API Payload: {payload}")
+        try:
+            result = post_request(payload)
+            print(f"API Result: {result}")
+            
+            # Check for error key first as per API documentation
+            if "error" in result:
+                print(f"API Error: {result['error']}")
+                return 0
+                
+            return int(result.get("count", 0))
+        except Exception as e:
+            print(f"Exception in API count_ngram: {e}")
+            return 0
 
 def get_frequency_counts(question: str) -> Dict[str, int]:
     """Get frequency counts for a question across different training stages."""
