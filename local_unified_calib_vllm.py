@@ -777,7 +777,7 @@ def save_experiment_details(args, safe_model_name, base_dir, model_name, model_i
 if __name__ == "__main__":
     import argparse
     '''
-    vllm serve google/gemma-2-2b-it --max-model-len 4096   --dtype bfloat16   --gpu-memory-utilization 0.94   --trust-remote-code --max-logprobs 25 --tensor-parallel-size 4
+    vllm serve Qwen/Qwen2.5-0.5B-Instruct --max-model-len 4096   --dtype bfloat16   --gpu-memory-utilization 0.94   --trust-remote-code --max-logprobs 25 --tensor-parallel-size 4
     '''
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -899,7 +899,7 @@ if __name__ == "__main__":
     end_idx = len(dataset[dataset_split])
     
     # Use pre-created index files for consistent sampling across experiments
-    datasets_needing_sampling = {"medmcqa", "mmlu", "simpleqa", "truthfulqa"}
+    datasets_needing_sampling = {"medmcqa", "mmlu", "simpleqa"}
     
     if args.dataset in datasets_needing_sampling:
         # Try to load pre-created index file

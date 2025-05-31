@@ -129,7 +129,7 @@ def get_initial_response(task):
 
 def get_cot_explanation(task):
     try:
-        if task["exp_type"] not in ["cot_exp", "verbalized_cot"]:
+        if task["exp_type"] not in ["cot_exp", "verbalized_cot", "otherAI_cot"]:
             return task
 
         model_name = task["model_name"]
@@ -137,10 +137,29 @@ def get_cot_explanation(task):
         max_tokens = task["max_tokens"]
         question_str = task["question_str"]
         response_text = task["response_text"]
+        exp_type = task["exp_type"]
 
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=[
+        # Use different message format and prompts based on experiment type
+        if exp_type == "otherAI_cot":
+            # For "other AI" experiments, include the answer in the user prompt with tags
+            cot_prompt = (
+                f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
+                f"Question: {question_str}\n\n"
+                f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
+                f"Before answering whether the above answer given by another AI is correct, "
+                "please provide a detailed chain-of-thought explanation of "
+                "your reasoning. Explain step-by-step how you arrived at "
+                "your answer and why you think it is correct or might be "
+                "incorrect."
+            )
+            
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": cot_prompt},
+            ]
+        else:
+            # For original experiments, use original format
+            messages = [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": question_str},
                 {"role": "assistant", "content": response_text},
@@ -154,7 +173,11 @@ def get_cot_explanation(task):
                         "incorrect."
                     ),
                 },
-            ],
+            ]
+
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=messages,
             temperature=temp,
             max_tokens=max_tokens,
         )
@@ -177,32 +200,81 @@ def get_confidence_score(task):
         response_text = task["response_text"]
         exp_type = task["exp_type"]
 
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": question_str},
-            {"role": "assistant", "content": response_text},
-        ]
-
-        if exp_type == "cot_exp":
+        # Build conversation based on experiment type
+        if exp_type == "otherAI_cot":
+            # For otherAI_cot, recreate the conversation that led to the CoT
             cot_text = task["cot_text"]
-            messages.extend([
-                {
-                    "role": "user",
-                    "content": (
-                        "Before answering whether your above answer is correct, "
-                        "please provide a detailed chain-of-thought explanation of "
-                        "your reasoning. Explain step-by-step how you arrived at "
-                        "your answer and why you think it is correct or might be "
-                        "incorrect."
-                    ),
-                },
+            cot_prompt = (
+                f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
+                f"Question: {question_str}\n\n"
+                f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
+                f"Before answering whether the other AI's answer is correct or incorrect, "
+                "please provide a detailed chain-of-thought explanation of "
+                "your reasoning. Analyze the other AI's answer step-by-step, "
+                "explain your evaluation process, and determine whether "
+                "the other AI's answer is correct or incorrect and why."
+            )
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": cot_prompt},
                 {"role": "assistant", "content": cot_text},
-            ])
+            ]
+        else:
+            # For other experiment types, use original logic
+            if exp_type == "otherAI":
+                # For otherAI experiments, format with tags
+                final_prompt = "Is the above answer given by the other AI true or false? Answer only with the single word 'true' or 'false'."
+                
+                combined_prompt = (
+                    f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
+                    f"Question: {question_str}\n\n"
+                    f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
+                    f"{final_prompt}"
+                )
+                messages = [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": combined_prompt},
+                ]
+            else:
+                # For regular experiments
+                messages = [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": question_str},
+                    {"role": "assistant", "content": response_text},
+                ]
 
-        messages.append({
-            "role": "user",
-            "content": "Is the above answer correct? Answer only with the single word 'true' or 'false'.",
-        })
+                if exp_type == "cot_exp":
+                    cot_text = task["cot_text"]
+                    messages.extend([
+                        {
+                            "role": "user",
+                            "content": (
+                                "Before answering whether your above answer is correct, "
+                                "please provide a detailed chain-of-thought explanation of "
+                                "your reasoning. Explain step-by-step how you arrived at "
+                                "your answer and why you think it is correct or might be "
+                                "incorrect."
+                            ),
+                        },
+                        {"role": "assistant", "content": cot_text},
+                    ])
+
+        # Use different final prompt based on experiment type
+        if exp_type in ["otherAI", "otherAI_cot"]:
+            # For otherAI experiments
+            if exp_type == "otherAI_cot":
+                final_prompt = "Is the above answer given by the other AI true or false? Answer only with the single word 'true' or 'false'."
+                messages.append({
+                    "role": "user",
+                    "content": final_prompt,
+                })
+            # For regular otherAI, final prompt is already included in combined_prompt
+        else:
+            final_prompt = "Is the above answer correct? Answer only with the single word 'true' or 'false'."
+            messages.append({
+                "role": "user",
+                "content": final_prompt,
+            })
 
         response = client.chat.completions.create(
             model=model_name,
@@ -396,6 +468,8 @@ def finalize_result(task):
             result["confidence_text"] = task["confidence_text"]
             if exp_type == "verbalized_cot":
                 result["inject_cot"] = task["cot_text"]
+        elif exp_type == "otherAI_cot":
+            result["inject_cot"] = task["cot_text"]
 
         return result
     except Exception as e:
@@ -467,7 +541,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--exp",
-        choices=["cot_exp", "zs_exp", "verbalized", "verbalized_cot"],
+        choices=["cot_exp", "zs_exp", "verbalized", "verbalized_cot", "otherAI", "otherAI_cot"],
         help="Experiment type",
         required=True,
     )
@@ -531,7 +605,7 @@ if __name__ == "__main__":
     end_idx = len(dataset[dataset_split])
     
     # Use pre-created index files for consistent sampling across experiments
-    datasets_needing_sampling = {"medmcqa", "mmlu", "simpleqa", "truthfulqa"}
+    datasets_needing_sampling = {"medmcqa", "mmlu", "simpleqa"}
     
     if args.dataset in datasets_needing_sampling:
         # Try to load pre-created index file
@@ -601,7 +675,7 @@ if __name__ == "__main__":
         max_workers=args.workers,
     )
 
-    if args.exp == "cot_exp" or args.exp == "verbalized_cot":
+    if args.exp == "cot_exp" or args.exp == "verbalized_cot" or args.exp == "otherAI_cot":
         print(f"Getting CoT explanations from LLM... - workers: {args.workers}")
         tasks = process_batch(
             tasks=tasks,

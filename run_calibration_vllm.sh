@@ -25,9 +25,9 @@ permitted_combinations["gsm8k"]="test"
 permitted_combinations["mmlu"]="test"
 permitted_combinations["medmcqa"]="validation"
 permitted_combinations["simpleqa"]="test"
-# permitted_combinations["truthfulqa"]="validation"
-
-datasets=("gsm8k" "mmlu" "medmcqa" "simpleqa" )
+permitted_combinations["truthfulqa"]="validation"
+# "gsm8k" "mmlu" "medmcqa" "simpleqa" 
+datasets=("truthfulqa")
 # "otherAI_cot"
 exps=("cot_exp" "zs_exp" "verbalized" "verbalized_cot" "otherAI")
 
