@@ -20,6 +20,39 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 
+def retry_openai_call(func, max_retries=5, backoff_seconds=10):
+    """
+    Retry wrapper for OpenAI API calls with exponential backoff.
+    
+    Args:
+        func: Function that makes the OpenAI API call
+        max_retries: Maximum number of retry attempts (default: 5)
+        backoff_seconds: Base backoff time in seconds (default: 10)
+    
+    Returns:
+        Result of the API call
+    
+    Raises:
+        Last exception if all retries fail
+    """
+    last_exception = None
+    
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except Exception as e:
+            last_exception = e
+            if attempt < max_retries - 1:  # Don't sleep on the last attempt
+                print(f"OpenAI API call failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
+                print(f"Retrying in {backoff_seconds} seconds...")
+                time.sleep(backoff_seconds)
+            else:
+                print(f"OpenAI API call failed after {max_retries} attempts")
+    
+    # If we get here, all retries failed
+    raise last_exception
+
+
 def get_safe_model_name(model_name: str) -> str:
     # Replace slashes and other special chars with underscores
     model_name = model_name.split("/")[-1]
@@ -108,15 +141,18 @@ def get_initial_response(task):
         max_tokens = task["max_tokens"]
         question_str = task["question_str"]
 
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": question_str},
-            ],
-            temperature=temp,
-            max_tokens=max_tokens,
-        )
+        def make_api_call():
+            return client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": question_str},
+                ],
+                temperature=temp,
+                max_tokens=max_tokens,
+            )
+
+        response = retry_openai_call(make_api_call)
 
         response_text = response.choices[0].message.content
         task["response_text"] = response_text
@@ -175,12 +211,15 @@ def get_cot_explanation(task):
                 },
             ]
 
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            temperature=temp,
-            max_tokens=max_tokens,
-        )
+        def make_api_call():
+            return client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=temp,
+                max_tokens=max_tokens,
+            )
+
+        response = retry_openai_call(make_api_call)
 
         cot_text = response.choices[0].message.content
         task["cot_text"] = cot_text
@@ -276,14 +315,17 @@ def get_confidence_score(task):
                 "content": final_prompt,
             })
 
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            temperature=temp,
-            max_tokens=1,
-            logprobs=True,
-            top_logprobs=20
-        )
+        def make_api_call():
+            return client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=temp,
+                max_tokens=1,
+                logprobs=True,
+                top_logprobs=20
+            )
+
+        response = retry_openai_call(make_api_call)
 
         # Extract logprobs from the response
         if response.choices and len(response.choices) > 0:
@@ -354,12 +396,15 @@ def get_verbalized_confidence(task):
             "content": "How confident are you that your above answer is correct? Please respond only in the format: Confidence: <number between 0.0 and 1.0>",
         })
 
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            temperature=temp,
-            max_tokens=512,
-        )
+        def make_api_call():
+            return client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=temp,
+                max_tokens=512,
+            )
+
+        response = retry_openai_call(make_api_call)
 
         # Extract the verbalized confidence response
         if response.choices and len(response.choices) > 0:

@@ -2,12 +2,12 @@
 
 # Define models to test (placeholders for now)
 models=(
+    "Qwen/Qwen2.5-0.5B-Instruct"
     "google/gemma-2-2b-it"
     "Qwen/Qwen2.5-14B-Instruct"
     "allenai/OLMo-2-1124-7B-Instruct"
     # GEMMA NEEDS NO SYSTEM PROMPT - eval later
     "google/gemma-2-9b-it"
-    "Qwen/Qwen2.5-0.5B-Instruct"
     "Qwen/Qwen2.5-3B-Instruct"
     "Qwen/Qwen2.5-7B-Instruct"
     "deepseek-ai/deepseek-math-7b-rl"
@@ -105,8 +105,8 @@ for model in "${models[@]}"; do
         --gpu-memory-utilization 0.94 \
         --trust-remote-code \
         --max-logprobs 25 \
-        --tensor-parallel-size 4 \
-        --port 8000 > /dev/null 2>&1 &
+        --port 8000 > test.log 2>&1 &
+        # --tensor-parallel-size 4 \
     
     sleep 120 # wait for the server to start
     # Store the PID of the vLLM server
