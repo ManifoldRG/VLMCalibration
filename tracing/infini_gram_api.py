@@ -46,8 +46,13 @@ def query_pretraining_api(concept: str, semantic_variations: List[str]) -> Dict[
         "all_variations_data": {}    # Store all data for each variation
     }
     
+    # Ensure we always have at least the concept itself to try
+    variations_to_try = semantic_variations.copy() if semantic_variations else []
+    if concept not in variations_to_try:
+        variations_to_try.insert(0, concept)
+    
     # Try each variation
-    for variation in semantic_variations:
+    for variation in variations_to_try:
         try:
             # Get document count
             find_payload = {"index": index, "query_type": "find", "query": variation}
@@ -123,9 +128,9 @@ def query_pretraining_api(concept: str, semantic_variations: List[str]) -> Dict[
     
     # Try CNF query if results are low for individual variations
     total_docs = sum(data.get("doc_count", 0) for data in result["all_variations_data"].values())
-    if total_docs < 10 and len(semantic_variations) > 1:
+    if total_docs < 10 and len(variations_to_try) > 1:
         try:
-            cnf_query = " OR ".join(semantic_variations[:4])  # API limit: max 4 terms
+            cnf_query = " AND ".join(variations_to_try[:4])  # API limit: max 4 terms
             
             # Try CNF find
             find_payload = {"index": index, "query_type": "find_cnf", "query": cnf_query}
@@ -203,5 +208,9 @@ def query_pretraining_api(concept: str, semantic_variations: List[str]) -> Dict[
     print(f"  Retrieved contexts for {len(result['variations_contexts'])} variations")
     print(f"  Collected data for {total_variations} variations")
     print(f"  Total contexts: {total_contexts}")
+    
+    # Add total counts to result
+    result["total_doc_count"] = total_doc_count
+    result["total_ngram_count"] = total_ngram_count
     
     return result 

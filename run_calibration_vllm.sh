@@ -2,7 +2,6 @@
 
 # Define models to test (placeholders for now)
 models=(
-    "meta-llama/Llama-3.1-8B-Instruct"
     "google/gemma-2-2b-it"
     "Qwen/Qwen2.5-14B-Instruct"
     "allenai/OLMo-2-1124-7B-Instruct"
@@ -14,6 +13,7 @@ models=(
     "deepseek-ai/deepseek-math-7b-rl"
     "deepseek-ai/deepseek-math-7b-instruct"
 
+    "meta-llama/Llama-3.1-8B-Instruct"
     "meta-llama/Llama-3.2-1B-Instruct"
     "meta-llama/Llama-3.2-3B-Instruct" 
     "allenai/OLMo-2-1124-13B-Instruct"
@@ -105,8 +105,8 @@ for model in "${models[@]}"; do
         --gpu-memory-utilization 0.94 \
         --trust-remote-code \
         --max-logprobs 25 \
+        --tensor-parallel-size 4 \
         --port 8000 > /dev/null 2>&1 &
-        # --tensor-parallel-size 4 \
     
     sleep 120 # wait for the server to start
     # Store the PID of the vLLM server

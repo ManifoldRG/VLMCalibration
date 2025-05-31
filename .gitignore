@@ -5,5 +5,4 @@ models*/
 # *.json
 *.gguf
 *.log
-*.png
 *.pdf
