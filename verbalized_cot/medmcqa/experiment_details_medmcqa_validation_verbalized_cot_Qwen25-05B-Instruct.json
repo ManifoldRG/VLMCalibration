@@ -1,0 +1,13 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "safe_model_name": "Qwen25-05B-Instruct",
+  "dataset": "medmcqa",
+  "split": "validation",
+  "experiment_type": "verbalized_cot",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "port": 8000,
+  "workers": 70,
+  "timestamp": "2025-05-31 02:31:03",
+  "model_info": "Qwen/Qwen2.5-0.5B-Instruct"
+}

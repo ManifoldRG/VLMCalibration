@@ -1,0 +1,13 @@
+{
+  "model": "deepseek-ai/deepseek-math-7b-instruct",
+  "safe_model_name": "deepseek-math-7b-instruct",
+  "dataset": "medmcqa",
+  "split": "validation",
+  "experiment_type": "zs_exp",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "port": 8000,
+  "workers": 50,
+  "timestamp": "2025-05-31 03:02:03",
+  "model_info": "deepseek-ai/deepseek-math-7b-instruct"
+}

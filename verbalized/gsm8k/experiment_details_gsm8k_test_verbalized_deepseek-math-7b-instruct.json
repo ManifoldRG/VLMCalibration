@@ -1,0 +1,13 @@
+{
+  "model": "deepseek-ai/deepseek-math-7b-instruct",
+  "safe_model_name": "deepseek-math-7b-instruct",
+  "dataset": "gsm8k",
+  "split": "test",
+  "experiment_type": "verbalized",
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "port": 8000,
+  "workers": 50,
+  "timestamp": "2025-05-31 02:53:52",
+  "model_info": "deepseek-ai/deepseek-math-7b-instruct"
+}
