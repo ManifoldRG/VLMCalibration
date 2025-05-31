@@ -62,7 +62,7 @@ def initialize_local_engine():
         )
 
 def generate_concept_variations(concept: str) -> List[str]:
-    """Generate variations of a concept to improve matching."""
+    """Generate simple variations of a concept (case variations only)."""
     variations = [concept]
     
     # Add lowercase version
@@ -73,23 +73,9 @@ def generate_concept_variations(concept: str) -> List[str]:
     if concept.title() != concept:
         variations.append(concept.title())
     
-    # Add uppercase version for acronyms/abbreviations
+    # Add uppercase version for acronyms/abbreviations (only if short)
     if len(concept.split()) <= 2 and concept.upper() != concept:
         variations.append(concept.upper())
-    
-    # Add version with common word variations
-    # Handle common substitutions
-    substitutions = [
-        ('birth', 'born'),
-        ('born', 'birth'),
-        ('eclipse', 'solar eclipse'),
-        ('eclipse', 'lunar eclipse'),
-    ]
-    
-    for original, replacement in substitutions:
-        if original in concept.lower():
-            new_concept = concept.lower().replace(original, replacement)
-            variations.append(new_concept)
     
     # Remove duplicates while preserving order
     seen = set()
@@ -103,28 +89,9 @@ def generate_concept_variations(concept: str) -> List[str]:
 
 def extract_concept_parts(concept: str) -> List[str]:
     """Extract meaningful parts of a concept for partial matching."""
-    parts = []
-    
-    # Split by common delimiters
-    words = re.split(r'[\s\-_,]+', concept.strip())
-    
-    # Add individual words (if meaningful)
-    for word in words:
-        word = word.strip()
-        if len(word) > 2 and word.lower() not in {'the', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'with'}:
-            parts.append(word)
-    
-    # Add bigrams
-    if len(words) >= 2:
-        for i in range(len(words) - 1):
-            bigram = f"{words[i]} {words[i+1]}"
-            if len(bigram) > 4:
-                parts.append(bigram)
-    
-    # Add the full concept
-    parts.append(concept)
-    
-    return parts
+    # REMOVED: This function was causing individual word queries
+    # Only return the full concept now
+    return [concept]
 
 def generate_semantic_variations_with_gpt4o(concept: str, api_key: str = None) -> List[str]:
     """
@@ -195,9 +162,9 @@ def generate_semantic_variations_with_gpt4o(concept: str, api_key: str = None) -
         # Fallback to simple variations
         return generate_concept_variations(concept)
 
-def count_ngram_with_semantic_variations(index: str, text: str) -> Dict[str, Any]:
-    """Count occurrences using semantic variations and CNF queries to preserve concept meaning."""
-    print(f"Searching for '{text}' in {index} with semantic preservation")
+def count_ngram_with_document_focus(index: str, text: str) -> Dict[str, Any]:
+    """Count document occurrences using semantic variations and prioritize document counts over n-gram counts."""
+    print(f"Searching for '{text}' in {index} with document-focused analysis")
     
     # Generate semantic variations using GPT-4o
     print("Generating semantic variations with GPT-4o...")
@@ -224,7 +191,8 @@ def count_ngram_with_semantic_variations(index: str, text: str) -> Dict[str, Any
             initialize_local_engine()
             
             best_result = {
-                "count": 0,
+                "doc_count": 0,
+                "ngram_count": 0,
                 "approx": False,
                 "token_ids": [],
                 "tokens": [],
@@ -236,24 +204,64 @@ def count_ngram_with_semantic_variations(index: str, text: str) -> Dict[str, Any
                 "semantic_variations": semantic_variations
             }
             
-            # First, try each variation individually
+            # First, try each variation individually with document focus
             for variation in all_variations:
                 try:
                     input_ids = tokenizer.encode(variation)
                     print(f"Trying variation '{variation}' -> tokens: {input_ids}")
                     
+                    # Get both n-gram count and document information
                     count_result = post_training_engine.count(input_ids=input_ids)
-                    count = int(count_result.get("count", 0))
+                    ngram_count = int(count_result.get("count", 0))
+                    
+                    doc_count = 0
+                    documents = []
+                    
+                    # If we have n-gram matches, get document count
+                    if ngram_count > 0:
+                        try:
+                            find_result = post_training_engine.find(input_ids=input_ids)
+                            # Calculate unique document count from segments
+                            total_segments = sum(end - start for start, end in find_result.get('segment_by_shard', []))
+                            doc_count = total_segments  # Each segment represents a document match
+                            
+                            # Get sample documents
+                            doc_sample_count = 0
+                            max_sample_docs = 3
+                            
+                            for s, (start, end) in enumerate(find_result.get('segment_by_shard', [])):
+                                for rank in range(start, min(end, start + max_sample_docs - doc_sample_count)):
+                                    if doc_sample_count >= max_sample_docs:
+                                        break
+                                    try:
+                                        doc = post_training_engine.get_doc_by_rank(s=s, rank=rank, max_disp_len=100)
+                                        documents.append({
+                                            "shard": s,
+                                            "rank": rank,
+                                            "doc_ix": doc.get("doc_ix"),
+                                            "text_sample": tokenizer.decode(doc.get("token_ids", [])[:50]) if doc.get("token_ids") else ""
+                                        })
+                                        doc_sample_count += 1
+                                    except Exception as e:
+                                        print(f"Error getting document: {e}")
+                                if doc_sample_count >= max_sample_docs:
+                                    break
+                                    
+                        except Exception as e:
+                            print(f"Error finding documents for '{variation}': {e}")
                     
                     var_result = {
-                        "count": count,
+                        "doc_count": doc_count,
+                        "ngram_count": ngram_count,
                         "approx": count_result.get("approx", False),
                         "token_ids": input_ids,
                         "tokens": [tokenizer.decode([token_id]) for token_id in input_ids],
+                        "documents": documents
                     }
                     best_result["all_variations"][variation] = var_result
                     
-                    if count > best_result["count"]:
+                    # Prioritize by document count, fallback to n-gram count
+                    if doc_count > best_result["doc_count"] or (doc_count == best_result["doc_count"] and ngram_count > best_result["ngram_count"]):
                         best_result.update(var_result)
                         best_result["best_match"] = variation
                         
@@ -261,9 +269,9 @@ def count_ngram_with_semantic_variations(index: str, text: str) -> Dict[str, Any
                     print(f"Error processing variation '{variation}': {e}")
                     continue
             
-            # If we have low matches, try CNF queries with semantic variations
-            if best_result["count"] < 50:  # Threshold for trying CNF
-                print(f"Low matches ({best_result['count']}), trying CNF with semantic variations...")
+            # If we have low document matches, try CNF queries with semantic variations
+            if best_result["doc_count"] < 10:  # Threshold for trying CNF
+                print(f"Low document matches ({best_result['doc_count']}), trying CNF with semantic variations...")
                 
                 # Try CNF with the top semantic variations
                 top_variations = semantic_variations[:5]  # Use top 5 semantic variations
@@ -272,12 +280,19 @@ def count_ngram_with_semantic_variations(index: str, text: str) -> Dict[str, Any
                     cnf_query = [[tokenizer.encode(var) for var in top_variations]]
                     print(f"CNF query token structure: {cnf_query}")
                     
-                    cnf_result = post_training_engine.count_cnf(cnf=cnf_query)
-                    cnf_count = int(cnf_result.get("count", 0))
+                    # Get CNF document matches
+                    cnf_result = post_training_engine.find_cnf(cnf=cnf_query)
+                    cnf_doc_count = cnf_result.get("cnt", 0)
                     
-                    if cnf_count > best_result["count"]:
-                        print(f"CNF query found {cnf_count} matches (better than {best_result['count']})")
-                        best_result["count"] = cnf_count
+                    if cnf_doc_count > best_result["doc_count"]:
+                        print(f"CNF query found {cnf_doc_count} document matches (better than {best_result['doc_count']})")
+                        
+                        # Get CNF n-gram count for reference
+                        cnf_count_result = post_training_engine.count_cnf(cnf=cnf_query)
+                        cnf_ngram_count = int(cnf_count_result.get("count", 0))
+                        
+                        best_result["doc_count"] = cnf_doc_count
+                        best_result["ngram_count"] = cnf_ngram_count
                         best_result["approx"] = cnf_result.get("approx", False)
                         best_result["best_match"] = f"CNF: {' OR '.join(top_variations)}"
                         best_result["cnf_query"] = True
@@ -285,12 +300,11 @@ def count_ngram_with_semantic_variations(index: str, text: str) -> Dict[str, Any
                         
                         # Try to get some documents from CNF
                         try:
-                            find_cnf_result = post_training_engine.find_cnf(cnf=cnf_query)
                             documents = []
                             doc_count = 0
                             max_docs = 3
                             
-                            for s, ptrs in enumerate(find_cnf_result.get('ptrs_by_shard', [])):
+                            for s, ptrs in enumerate(cnf_result.get('ptrs_by_shard', [])):
                                 for ptr in ptrs[:max_docs - doc_count]:
                                     if doc_count >= max_docs:
                                         break
@@ -316,14 +330,15 @@ def count_ngram_with_semantic_variations(index: str, text: str) -> Dict[str, Any
                 except Exception as e:
                     print(f"Error with semantic CNF query: {e}")
             
-            print(f"Best result for '{text}': {best_result['count']} matches with '{best_result.get('best_match', text)}'")
+            print(f"Best result for '{text}': {best_result['doc_count']} docs, {best_result['ngram_count']} n-grams with '{best_result.get('best_match', text)}'")
             return best_result
             
         except Exception as e:
-            print(f"Exception in local count_ngram_with_semantic_variations: {e}")
+            print(f"Exception in local count_ngram_with_document_focus: {e}")
             traceback.print_exc()
             return {
-                "count": 0,
+                "doc_count": 0,
+                "ngram_count": 0,
                 "approx": False,
                 "token_ids": [],
                 "tokens": [],
@@ -333,10 +348,11 @@ def count_ngram_with_semantic_variations(index: str, text: str) -> Dict[str, Any
                 "error": str(e)
             }
     
-    # Use API for other indexes (pretraining) with semantic variations
+    # Use API for other indexes (pretraining) - try to get document information
     else:
         best_result = {
-            "count": 0,
+            "doc_count": 0,
+            "ngram_count": 0,
             "approx": False,
             "token_ids": [],
             "tokens": [],
@@ -345,24 +361,50 @@ def count_ngram_with_semantic_variations(index: str, text: str) -> Dict[str, Any
             "semantic_variations": semantic_variations
         }
         
-        # Try each variation with API
+        # Try each variation with API - focus on getting document counts when possible
         for variation in all_variations:
-            payload = {"index": index, "query_type": "count", "query": variation}
             try:
-                result = post_request(payload)
+                # First try to get document count using find query type
+                find_payload = {"index": index, "query_type": "find", "query": variation}
+                find_result = None
+                doc_count = 0
                 
-                if "error" not in result:
-                    count = int(result.get("count", 0))
+                try:
+                    find_result = post_request(find_payload)
+                    if "error" not in find_result:
+                        doc_count = int(find_result.get("cnt", 0))
+                        print(f"API find for '{variation}': {doc_count} documents")
+                except Exception as e:
+                    print(f"API find query failed for '{variation}': {e}")
+                    # Fallback to count query
+                    find_result = None
+                
+                # Get n-gram count as well
+                count_payload = {"index": index, "query_type": "count", "query": variation}
+                count_result = post_request(count_payload)
+                ngram_count = 0
+                
+                if "error" not in count_result:
+                    ngram_count = int(count_result.get("count", 0))
+                    
                     var_result = {
-                        "count": count,
-                        "approx": result.get("approx", False),
-                        "token_ids": result.get("token_ids", []),
-                        "tokens": result.get("tokens", []),
-                        "latency": result.get("latency", 0.0)
+                        "doc_count": doc_count,
+                        "ngram_count": ngram_count,
+                        "approx": count_result.get("approx", False),
+                        "token_ids": count_result.get("token_ids", []),
+                        "tokens": count_result.get("tokens", []),
+                        "latency": count_result.get("latency", 0.0)
                     }
+                    
+                    # If find query worked, use those results
+                    if find_result and "error" not in find_result:
+                        var_result["find_approx"] = find_result.get("approx", False)
+                        var_result["find_latency"] = find_result.get("latency", 0.0)
+                    
                     best_result["all_variations"][variation] = var_result
                     
-                    if count > best_result["count"]:
+                    # Prioritize by document count, fallback to n-gram count
+                    if doc_count > best_result["doc_count"] or (doc_count == best_result["doc_count"] and ngram_count > best_result["ngram_count"]):
                         best_result.update(var_result)
                         best_result["best_match"] = variation
                         
@@ -372,51 +414,57 @@ def count_ngram_with_semantic_variations(index: str, text: str) -> Dict[str, Any
             
             time.sleep(0.1)  # Rate limiting
         
-        # If still low matches, try CNF query with API
-        if best_result["count"] < 50 and len(semantic_variations) > 1:
+        # If still low document matches and we have semantic variations, try CNF query with API
+        if best_result["doc_count"] < 10 and len(semantic_variations) > 1:
             try:
-                print(f"Trying CNF query with API for low matches...")
+                print(f"Trying CNF query with API for low document matches...")
                 # Use top semantic variations for CNF
                 top_variations = semantic_variations[:4]  # Limit for API
                 cnf_query = " OR ".join(top_variations)
-                payload = {"index": index, "query_type": "count", "query": cnf_query}
                 
-                result = post_request(payload)
-                if "error" not in result:
-                    cnf_count = int(result.get("count", 0))
-                    if cnf_count > best_result["count"]:
-                        print(f"API CNF query found {cnf_count} matches (better than {best_result['count']})")
-                        best_result["count"] = cnf_count
-                        best_result["approx"] = result.get("approx", False)
-                        best_result["token_ids"] = result.get("token_ids", [])
-                        best_result["tokens"] = result.get("tokens", [])
+                # Try find query for documents
+                find_payload = {"index": index, "query_type": "find", "query": cnf_query}
+                doc_count = 0
+                try:
+                    find_result = post_request(find_payload)
+                    if "error" not in find_result:
+                        doc_count = int(find_result.get("cnt", 0))
+                except Exception as e:
+                    print(f"API CNF find query failed: {e}")
+                
+                # Get CNF count
+                count_payload = {"index": index, "query_type": "count", "query": cnf_query}
+                count_result = post_request(count_payload)
+                
+                if "error" not in count_result:
+                    cnf_ngram_count = int(count_result.get("count", 0))
+                    
+                    if doc_count > best_result["doc_count"] or (doc_count == best_result["doc_count"] and cnf_ngram_count > best_result["ngram_count"]):
+                        print(f"API CNF query found {doc_count} documents, {cnf_ngram_count} n-grams (better than {best_result['doc_count']} docs)")
+                        best_result["doc_count"] = doc_count
+                        best_result["ngram_count"] = cnf_ngram_count
+                        best_result["approx"] = count_result.get("approx", False)
+                        best_result["token_ids"] = count_result.get("token_ids", [])
+                        best_result["tokens"] = count_result.get("tokens", [])
                         best_result["best_match"] = f"CNF: {cnf_query}"
-                        best_result["latency"] = result.get("latency", 0.0)
+                        best_result["latency"] = count_result.get("latency", 0.0)
                         best_result["cnf_query"] = True
                         best_result["cnf_variations"] = top_variations
                         
             except Exception as e:
                 print(f"Error with API CNF query: {e}")
         
-        print(f"API best result for '{text}': {best_result['count']} matches with '{best_result.get('best_match', text)}'")
+        print(f"API best result for '{text}': {best_result['doc_count']} docs, {best_result['ngram_count']} n-grams with '{best_result.get('best_match', text)}'")
         return best_result
 
-def post_request(payload: Dict[str, Any], retries: int = 3, backoff: float = 0.5) -> Dict:
-    """POST request with retry logic."""
-    for attempt in range(retries):
-        try:
-            r = requests.post(API_URL, json=payload, timeout=30)
-            r.raise_for_status()
-            data = r.json()
-            if "error" in data:
-                raise RuntimeError(data["error"])
-            return data
-        except Exception as e:
-            if attempt == retries - 1:
-                print(f"Failed after {retries} attempts: {e}")
-                raise
-            time.sleep(backoff * (2 ** attempt))
-    return {}
+def get_frequency_counts_with_document_focus(question: str) -> Dict[str, Any]:
+    """Get document-focused frequency counts for a question across different training stages."""
+    results = {}
+    for stage, index in OLMO_INDEXES.items():
+        result = count_ngram_with_document_focus(index, question)
+        results[stage] = result
+        time.sleep(0.1)  # Rate limiting
+    return results
 
 def extract_question_text(full_question: str) -> str:
     """Extract the actual question from the full prompt."""
@@ -484,8 +532,25 @@ def extract_concept(question: str, api_key: str = None) -> str:
         print(f"Error extracting concept: {e}")
         return "unknown concept"
 
+def post_request(payload: Dict[str, Any], retries: int = 3, backoff: float = 0.5) -> Dict:
+    """POST request with retry logic."""
+    for attempt in range(retries):
+        try:
+            r = requests.post(API_URL, json=payload, timeout=30)
+            r.raise_for_status()
+            data = r.json()
+            if "error" in data:
+                raise RuntimeError(data["error"])
+            return data
+        except Exception as e:
+            if attempt == retries - 1:
+                print(f"Failed after {retries} attempts: {e}")
+                raise
+            time.sleep(backoff * (2 ** attempt))
+    return {}
+
 def count_ngram(index: str, text: str) -> Dict[str, Any]:
-    """Count occurrences of text in the specified index and return comprehensive information."""
+    """Count document occurrences and n-gram occurrences of text in the specified index."""
     
     # Check if this is the post_training index (use local package)
     if index == OLMO_INDEXES["post_training"]:
@@ -495,7 +560,6 @@ def count_ngram(index: str, text: str) -> Dict[str, Any]:
             print("Local engine initialized")
             
             # Tokenize the text
-            # text = "natural language processing"
             input_ids = tokenizer.encode(text)
             print(f"Tokenized '{text}' to: {input_ids}")
             
@@ -503,20 +567,25 @@ def count_ngram(index: str, text: str) -> Dict[str, Any]:
             count_result = post_training_engine.count(input_ids=input_ids)
             print(f"Local engine count result: {count_result}")
             
-            # Get comprehensive information
+            # Get comprehensive information with document focus
             result = {
-                "count": int(count_result.get("count", 0)),
+                "doc_count": 0,
+                "ngram_count": int(count_result.get("count", 0)),
                 "approx": count_result.get("approx", False),
                 "token_ids": input_ids,
                 "tokens": [tokenizer.decode([token_id]) for token_id in input_ids],
             }
             
-            # If we found matches, get document information
-            if result["count"] > 0:
+            # If we found n-gram matches, get document information
+            if result["ngram_count"] > 0:
                 try:
                     # Find documents containing this text
                     find_result = post_training_engine.find(input_ids=input_ids)
                     print(f"Find result: {find_result}")
+                    
+                    # Calculate document count from segments
+                    total_segments = sum(end - start for start, end in find_result.get('segment_by_shard', []))
+                    result["doc_count"] = total_segments
                     
                     # Get a sample of documents (up to 5)
                     documents = []
@@ -545,7 +614,7 @@ def count_ngram(index: str, text: str) -> Dict[str, Any]:
                             break
                     
                     result["documents"] = documents
-                    result["total_segments"] = sum(end - start for start, end in find_result.get('segment_by_shard', []))
+                    result["total_segments"] = total_segments
                     
                     # Get next-token distribution for additional analysis
                     try:
@@ -587,7 +656,8 @@ def count_ngram(index: str, text: str) -> Dict[str, Any]:
             print(f"Exception in local count_ngram: {e}")
             traceback.print_exc()
             return {
-                "count": 0,
+                "doc_count": 0,
+                "ngram_count": 0,
                 "approx": False,
                 "token_ids": [],
                 "tokens": [],
@@ -597,36 +667,60 @@ def count_ngram(index: str, text: str) -> Dict[str, Any]:
                 "error": str(e)
             }
     
-    # Use API for other indexes (pretraining)
+    # Use API for other indexes (pretraining) - try to get both document and n-gram counts
     else:
-        payload = {"index": index, "query_type": "count", "query": text}
-        print(f"API Payload: {payload}")
         try:
-            result = post_request(payload)
-            print(f"API Result: {result}")
+            # Try to get document count first
+            find_payload = {"index": index, "query_type": "find", "query": text}
+            doc_count = 0
+            find_result = None
+            
+            try:
+                find_result = post_request(find_payload)
+                if "error" not in find_result:
+                    doc_count = int(find_result.get("cnt", 0))
+                    print(f"API find result: {doc_count} documents")
+            except Exception as e:
+                print(f"API find query failed: {e}")
+            
+            # Get n-gram count
+            count_payload = {"index": index, "query_type": "count", "query": text}
+            count_result = post_request(count_payload)
+            print(f"API Count Payload: {count_payload}")
+            print(f"API Count Result: {count_result}")
             
             # Check for error key first as per API documentation
-            if "error" in result:
-                print(f"API Error: {result['error']}")
+            if "error" in count_result:
+                print(f"API Error: {count_result['error']}")
                 return {
-                    "count": 0,
+                    "doc_count": doc_count,
+                    "ngram_count": 0,
                     "approx": False,
                     "token_ids": [],
                     "tokens": [],
-                    "error": result["error"]
+                    "error": count_result["error"]
                 }
                 
-            return {
-                "count": int(result.get("count", 0)),
-                "approx": result.get("approx", False),
-                "token_ids": result.get("token_ids", []),
-                "tokens": result.get("tokens", []),
-                "latency": result.get("latency", 0.0)
+            result = {
+                "doc_count": doc_count,
+                "ngram_count": int(count_result.get("count", 0)),
+                "approx": count_result.get("approx", False),
+                "token_ids": count_result.get("token_ids", []),
+                "tokens": count_result.get("tokens", []),
+                "latency": count_result.get("latency", 0.0)
             }
+            
+            # If find query worked, add those details
+            if find_result and "error" not in find_result:
+                result["find_approx"] = find_result.get("approx", False)
+                result["find_latency"] = find_result.get("latency", 0.0)
+            
+            return result
         except Exception as e:
             print(f"Exception in API count_ngram: {e}")
             return {
-                "count": 0,
+                "doc_count": 0,
+                "ngram_count": 0,
                 "approx": False,
                 "token_ids": [],
                 "tokens": [],
@@ -637,7 +731,7 @@ def get_frequency_counts(question: str) -> Dict[str, Any]:
     """Get frequency counts and comprehensive information for a question across different training stages."""
     results = {}
     for stage, index in OLMO_INDEXES.items():
-        result = count_ngram_with_semantic_variations(index, question)
+        result = count_ngram(index, question)
         results[stage] = result
         time.sleep(0.1)  # Rate limiting
     return results
@@ -668,7 +762,7 @@ def analyze_data(input_file: str) -> Tuple[Dict, List]:
     with open(input_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
-    data = data[:4]
+    data = data[:1]
     # Process all records in the dataset
     print(f"Processing {len(data)} records from {input_file}")
     
@@ -690,22 +784,22 @@ def analyze_data(input_file: str) -> Tuple[Dict, List]:
         
         # Get frequency counts with improved matching
         print(f"Searching for frequency counts...")
-        freq_results = get_frequency_counts(concept)
+        freq_results = get_frequency_counts_with_document_focus(concept)
         
         # Print detailed results for debugging
         print(f"\nFrequency Results:")
         for stage, result in freq_results.items():
-            count = result.get("count", 0)
+            count = result.get("doc_count", 0)
             best_match = result.get("best_match", concept)
             all_variations = result.get("all_variations", {})
             
-            print(f"  {stage}: {count} matches")
+            print(f"  {stage}: {count} docs")
             print(f"    Best match: '{best_match}'")
             if all_variations:
                 print(f"    All variations tried:")
                 for var, var_result in all_variations.items():
-                    var_count = var_result.get("count", 0)
-                    print(f"      '{var}': {var_count} matches")
+                    var_count = var_result.get("doc_count", 0)
+                    print(f"      '{var}': {var_count} docs")
             
             # If we have documents, show a sample
             documents = result.get("documents", [])
@@ -715,58 +809,11 @@ def analyze_data(input_file: str) -> Tuple[Dict, List]:
                     sample = doc.get("text_sample", "")[:100] + "..." if len(doc.get("text_sample", "")) > 100 else doc.get("text_sample", "")
                     print(f"      {j+1}. {sample}")
         
-        # If we didn't get good matches, try some fallback strategies
-        total_matches = sum(result.get("count", 0) for result in freq_results.values())
-        if total_matches < 10:  # Very low matches
-            print(f"\nLow total matches ({total_matches}), trying fallback strategies...")
-            
-            # Try extracting parts of the concept
-            concept_parts = extract_concept_parts(concept)
-            print(f"Concept parts: {concept_parts}")
-            
-            best_fallback_results = {}
-            for stage in OLMO_INDEXES.keys():
-                best_fallback_results[stage] = freq_results[stage].copy()  # Start with original
-                
-                # Try each concept part
-                for part in concept_parts:
-                    if part != concept and len(part) > 2:  # Don't retry the original concept
-                        try:
-                            print(f"  Trying fallback part: '{part}' for {stage}")
-                            part_result = count_ngram_with_semantic_variations(OLMO_INDEXES[stage], part)
-                            part_count = part_result.get("count", 0)
-                            
-                            if part_count > best_fallback_results[stage].get("count", 0):
-                                print(f"    Found better match with '{part}': {part_count} > {best_fallback_results[stage].get('count', 0)}")
-                                best_fallback_results[stage] = part_result
-                                best_fallback_results[stage]["fallback_used"] = part
-                            
-                        except Exception as e:
-                            print(f"    Error with fallback part '{part}': {e}")
-                        
-                        time.sleep(0.1)  # Rate limiting
-            
-            # Update results if fallback found better matches
-            improved = False
-            for stage in OLMO_INDEXES.keys():
-                if best_fallback_results[stage].get("count", 0) > freq_results[stage].get("count", 0):
-                    freq_results[stage] = best_fallback_results[stage]
-                    improved = True
-            
-            if improved:
-                print(f"Fallback strategies improved results!")
-                for stage, result in freq_results.items():
-                    if result.get("fallback_used"):
-                        print(f"  {stage}: Using fallback '{result['fallback_used']}' -> {result.get('count', 0)} matches")
-        
         print(f"\nFinal frequency counts:")
         for stage, result in freq_results.items():
-            count = result.get("count", 0)
+            count = result.get("doc_count", 0)
             match_used = result.get("best_match", concept)
-            fallback = result.get("fallback_used")
-            if fallback:
-                match_used = f"{fallback} (fallback)"
-            print(f"  {stage}: {count} matches (using: {match_used})")
+            print(f"  {stage}: {count} docs (using: {match_used})")
         
         # Store result
         result = {
@@ -776,7 +823,7 @@ def analyze_data(input_file: str) -> Tuple[Dict, List]:
             "p_true": record["p_true"],
             "correct": record["correct"],
             "frequency_results": freq_results,
-            "frequency_counts": {stage: data.get("count", 0) for stage, data in freq_results.items()}
+            "frequency_counts": {stage: data.get("doc_count", 0) for stage, data in freq_results.items()}
         }
         results.append(result)
         
@@ -793,34 +840,37 @@ def analyze_data(input_file: str) -> Tuple[Dict, List]:
     for i, result in enumerate(results):
         print(f"Record {i+1}: {result['concept']}")
         for stage, count in result['frequency_counts'].items():
-            print(f"  {stage}: {count}")
+            # Also show n-gram counts for reference
+            freq_result = result['frequency_results'][stage]
+            ngram_count = freq_result.get('ngram_count', 0)
+            print(f"  {stage}: {count} docs ({ngram_count} n-grams)")
     
     # Now proceed to binning and ECE calculation
-    print(f"\nProceeding to frequency binning and ECE calculation...")
+    print(f"\nProceeding to document frequency binning and ECE calculation...")
     
-    # Create frequency bins for each training stage
+    # Create frequency bins for each training stage based on document counts
     analysis_results = {}
     
     for stage in OLMO_INDEXES.keys():
         print(f"\nProcessing {stage} stage...")
         
-        # Extract data for this stage
+        # Extract data for this stage using document counts
         stage_data = []
         for result in results:
-            freq_count = result['frequency_counts'].get(stage, 0)
-            if freq_count > 0:  # Only include non-zero frequencies
+            doc_count = result['frequency_counts'].get(stage, 0)
+            if doc_count > 0:  # Only include non-zero document frequencies
                 stage_data.append({
-                    'frequency': freq_count,
+                    'frequency': doc_count,
                     'p_true': result['p_true'],
                     'correct': result['correct']
                 })
         
         if not stage_data:
-            print(f"  No data with non-zero frequencies for {stage}")
+            print(f"  No data with non-zero document frequencies for {stage}")
             analysis_results[stage] = []
             continue
         
-        print(f"  {len(stage_data)} samples with non-zero frequencies")
+        print(f"  {len(stage_data)} samples with non-zero document frequencies")
         
         # Sort by frequency for binning
         stage_data.sort(key=lambda x: x['frequency'])
@@ -898,8 +948,8 @@ def analyze_data(input_file: str) -> Tuple[Dict, List]:
             
             bin_results.append(bin_result)
             
-            print(f"    Bin {i+1}: freq=[{bin_lower:.1f}, {bin_upper:.1f}], "
-                  f"n={len(bin_samples)}, avg_freq={avg_frequency:.1f}, "
+            print(f"    Bin {i+1}: doc_freq=[{bin_lower:.1f}, {bin_upper:.1f}], "
+                  f"n={len(bin_samples)}, avg_doc_freq={avg_frequency:.1f}, "
                   f"ECE={bin_ece:.4f}, conf={avg_confidence:.3f}, acc={accuracy:.3f}")
         
         analysis_results[stage] = bin_results
@@ -907,57 +957,102 @@ def analyze_data(input_file: str) -> Tuple[Dict, List]:
     return analysis_results, results
 
 def plot_results(analysis_results: Dict, output_file: str):
-    """Plot ECE vs frequency for different training stages."""
-    plt.figure(figsize=(12, 8))
+    """Plot ECE histogram from p_true with frequency bins for pretraining and posttraining."""
     
-    colors = {"pretraining": "blue", "post_training": "orange"}
-    markers = {"pretraining": "o", "post_training": "s"}
+    # Prepare data for histogram
+    pretraining_data = analysis_results.get('pretraining', [])
+    posttraining_data = analysis_results.get('post_training', [])
     
-    for stage, data in analysis_results.items():
-        if not data:
-            continue
-            
-        frequencies = [d["avg_frequency"] for d in data]
-        eces = [d["ece"] for d in data]
-        counts = [d["count"] for d in data]
+    if not pretraining_data and not posttraining_data:
+        print("No data available for plotting")
+        return
+    
+    # Create figure with subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+    
+    # Plot 1: ECE Histogram for Pretraining
+    if pretraining_data:
+        ece_values = [d["ece"] for d in pretraining_data]
+        frequencies = [d["avg_frequency"] for d in pretraining_data]
+        counts = [d["count"] for d in pretraining_data]
         
-        # Size points by number of samples in bin
-        sizes = [min(c * 5, 200) for c in counts]  # Scale point sizes
+        # Create histogram bars
+        bins = range(len(ece_values))
+        bars1 = ax1.bar(bins, ece_values, color='blue', alpha=0.7, 
+                       label=f'Pretraining ({len(ece_values)} bins)')
         
-        plt.scatter(frequencies, eces, 
-                   c=colors[stage], marker=markers[stage], 
-                   s=sizes, alpha=0.7, label=f"{stage.replace('_', ' ').title()}")
+        # Add frequency labels on x-axis
+        ax1.set_xticks(bins)
+        ax1.set_xticklabels([f'{int(f)}' for f in frequencies], rotation=45, ha='right')
+        ax1.set_xlabel('Document Frequency in Training Data')
+        ax1.set_ylabel('Expected Calibration Error (ECE)')
+        ax1.set_title('ECE from p_true - Pretraining Data')
+        ax1.grid(True, alpha=0.3, axis='y')
         
-        # Add trend line
-        if len(frequencies) > 1:
-            z = np.polyfit(np.log(np.array(frequencies) + 1), eces, 1)
-            p = np.poly1d(z)
-            x_smooth = np.logspace(np.log10(min(frequencies)), np.log10(max(frequencies)), 100)
-            plt.plot(x_smooth, p(np.log(x_smooth + 1)), 
-                    color=colors[stage], alpha=0.5, linestyle='--')
+        # Add count labels on top of bars
+        for i, (bar, count, ece) in enumerate(zip(bars1, counts, ece_values)):
+            ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
+                    f'n={count}\nECE={ece:.3f}', 
+                    ha='center', va='bottom', fontsize=8)
+    else:
+        ax1.text(0.5, 0.5, 'No pretraining data available', 
+                ha='center', va='center', transform=ax1.transAxes, fontsize=12)
+        ax1.set_title('ECE from p_true - Pretraining Data')
     
-    plt.xscale('log')
-    plt.xlabel('Average Frequency in Training Data (log scale)')
-    plt.ylabel('Expected Calibration Error (ECE)')
-    plt.title('ECE vs Text Frequency in OLMO Training Data\n(Point size indicates number of samples)')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
+    # Plot 2: ECE Histogram for Post-training
+    if posttraining_data:
+        ece_values = [d["ece"] for d in posttraining_data]
+        frequencies = [d["avg_frequency"] for d in posttraining_data]
+        counts = [d["count"] for d in posttraining_data]
+        
+        # Create histogram bars
+        bins = range(len(ece_values))
+        bars2 = ax2.bar(bins, ece_values, color='orange', alpha=0.7,
+                       label=f'Post-training ({len(ece_values)} bins)')
+        
+        # Add frequency labels on x-axis
+        ax2.set_xticks(bins)
+        ax2.set_xticklabels([f'{int(f)}' for f in frequencies], rotation=45, ha='right')
+        ax2.set_xlabel('Document Frequency in Training Data')
+        ax2.set_ylabel('Expected Calibration Error (ECE)')
+        ax2.set_title('ECE from p_true - Post-training Data')
+        ax2.grid(True, alpha=0.3, axis='y')
+        
+        # Add count labels on top of bars
+        for i, (bar, count, ece) in enumerate(zip(bars2, counts, ece_values)):
+            ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
+                    f'n={count}\nECE={ece:.3f}', 
+                    ha='center', va='bottom', fontsize=8)
+    else:
+        ax2.text(0.5, 0.5, 'No post-training data available', 
+                ha='center', va='center', transform=ax2.transAxes, fontsize=12)
+        ax2.set_title('ECE from p_true - Post-training Data')
     
-    # Add text box with summary
-    plt.text(0.02, 0.98, 
-             f"Analysis of {sum(len(d) for d in analysis_results.values())} frequency bins\n"
-             f"Larger points = more samples in bin", 
-             transform=plt.gca().transAxes, fontsize=10,
-             verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    # Add overall title
+    total_bins = len(pretraining_data) + len(posttraining_data)
+    fig.suptitle(f'ECE (from p_true) Histogram by Document Frequency\n'
+                f'Total: {total_bins} frequency bins', fontsize=14, y=0.98)
     
     plt.tight_layout()
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
-    print(f"Plot saved to {output_file}")
+    print(f"ECE histogram saved to {output_file}")
+    
+    # Print summary statistics
+    print(f"\nHistogram Summary:")
+    if pretraining_data:
+        pre_avg_ece = np.mean([d["ece"] for d in pretraining_data])
+        pre_total_samples = sum([d["count"] for d in pretraining_data])
+        print(f"Pretraining: {len(pretraining_data)} bins, avg ECE = {pre_avg_ece:.4f}, total samples = {pre_total_samples}")
+    
+    if posttraining_data:
+        post_avg_ece = np.mean([d["ece"] for d in posttraining_data])
+        post_total_samples = sum([d["count"] for d in posttraining_data])
+        print(f"Post-training: {len(posttraining_data)} bins, avg ECE = {post_avg_ece:.4f}, total samples = {post_total_samples}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Analyze SimpleQA data with infini-gram")
+    parser = argparse.ArgumentParser(description="Analyze SimpleQA data with infini-gram document frequency analysis")
     parser.add_argument("--input", required=True, help="Input SimpleQA JSON file")
-    parser.add_argument("--output", default="ece_vs_frequency.png", help="Output plot file")
+    parser.add_argument("--output", default="ece_vs_document_frequency.png", help="Output plot file")
     parser.add_argument("--save-results", help="Save analysis results to JSON file")
     
     args = parser.parse_args()
