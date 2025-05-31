@@ -5,6 +5,7 @@ import re
 from simpleQA_grader_template import GRADER_TEMPLATE
 from openai import OpenAI
 import time
+import traceback
 
 def format_gsm8k_question(question: str) -> str:
     return f'Given the following problem, reason and give a final answer to the problem.\nProblem: {question}\nYour response should end with "The final answer is [answer]" where [answer] is the response to the problem.'
@@ -141,6 +142,7 @@ def validate_simpleqa_answer(question: str, model_answer: str, true_answer: str,
                 return None
                 
             print(f"Grading attempt {attempt + 1} failed: {e}. Retrying in {delay} seconds...")
+            traceback.print_exc()
             time.sleep(delay)
             delay *= 2  # Exponential backoff
 
