@@ -240,8 +240,6 @@ if __name__ == "__main__":
     
     # Test the local post-training query functionality
     print("Testing local post-training index query...")
-    from huggingface_hub import login
-    login(token='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')
     # Default test concept and variations
     test_concept = "Jamia Millia"
     test_variations = [
