@@ -298,7 +298,8 @@ def main():
     parser.add_argument("--cot-file", help="Input CoT JSON file for ZS vs CoT comparison")
     
     args = parser.parse_args()
-    
+    from huggingface_hub import login
+    login(token='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')
     # Check for mutually exclusive filtering options
     filter_options = [args.overconfident, args.underconfident, args.zs_cot_compare]
     if sum(filter_options) > 1:

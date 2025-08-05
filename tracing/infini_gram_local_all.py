@@ -240,25 +240,26 @@ if __name__ == "__main__":
     
     # Test the local post-training query functionality
     print("Testing local post-training index query...")
-    
+    from huggingface_hub import login
+    login(token='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')
     # Default test concept and variations
     test_concept = "Jamia Millia"
-    # test_variations = [
-    #     "natural language processing",
-    #     "NLP",
-    #     "language processing",
-    #     "natural language",
-    #     "computational linguistics"
-    # ]
+    test_variations = [
+        "natural language processing",
+        "NLP",
+        "language processing",
+        "natural language",
+        "computational linguistics"
+    ]
     
-    # # Allow command line argument for custom concept
-    # if len(sys.argv) > 1:
-    #     test_concept = sys.argv[1]
-    #     test_variations = [test_concept]
-    #     print(f"Using command line concept: {test_concept}")
-    # else:
-    #     print(f"Using default test concept: {test_concept}")
-    #     print(f"With variations: {test_variations}")
+    # Allow command line argument for custom concept
+    if len(sys.argv) > 1:
+        test_concept = sys.argv[1]
+        test_variations = [test_concept]
+        print(f"Using command line concept: {test_concept}")
+    else:
+        print(f"Using default test concept: {test_concept}")
+        print(f"With variations: {test_variations}")
     
     try:
         result = query_post_training_local(test_concept, [])
