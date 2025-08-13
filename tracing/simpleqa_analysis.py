@@ -135,7 +135,7 @@ def generate_semantic_variations(concept: str, api_key: str = None) -> List[str]
         return list(dict.fromkeys(variations))  # Remove duplicates
 
 
-def process_record(record, idx, total):
+def process_record(record, idx, total,zero_points:bool):
     """Process a single SimpleQA record with concept extraction and frequency queries."""
     print(f"\n{'='*60}")
     print(f"Processing record {idx+1}/{total}")
@@ -155,7 +155,7 @@ def process_record(record, idx, total):
     
     # Query pretraining corpus
     print("\nQuerying pretraining corpus...")
-    pretraining_result = query_pretraining_api(concept, semantic_variations)
+    pretraining_result = query_pretraining_api(concept, semantic_variations,zero_points)
     
     # Query post-training corpus
     print("\nQuerying post-training corpus...")
@@ -184,7 +184,7 @@ def process_record(record, idx, total):
     return result
 
 
-def analyze_data(input_file: str, limit: int = None, overconfident: bool = False, underconfident: bool = False, zs_cot_compare: bool = False, cot_file: str = None) -> List[Dict]:
+def analyze_data(input_file: str, limit: int = None, overconfident: bool = False, underconfident: bool = False, zs_cot_compare: bool = False, cot_file: str = None, zero_points: bool = False) -> List[Dict]:
     """Analyze the SimpleQA data and return results."""
     # Load data using utils with filtering options
     if zs_cot_compare and cot_file:
@@ -211,7 +211,7 @@ def analyze_data(input_file: str, limit: int = None, overconfident: bool = False
             print(f"\nProcessing {len(data_scenario1)} records for Scenario 1...")
             results_scenario1 = []
             with ThreadPoolExecutor(max_workers=20) as executor:
-                future_to_idx = {executor.submit(process_record, record, i, len(data_scenario1)): i for i, record in enumerate(data_scenario1)}
+                future_to_idx = {executor.submit(process_record, record, i, len(data_scenario1), zero_points): i for i, record in enumerate(data_scenario1)}
                 
                 for future in as_completed(future_to_idx):
                     idx = future_to_idx[future]
@@ -230,7 +230,7 @@ def analyze_data(input_file: str, limit: int = None, overconfident: bool = False
             print(f"\nProcessing {len(data_scenario2)} records for Scenario 2...")
             results_scenario2 = []
             with ThreadPoolExecutor(max_workers=20) as executor:
-                future_to_idx = {executor.submit(process_record, record, i, len(data_scenario2)): i for i, record in enumerate(data_scenario2)}
+                future_to_idx = {executor.submit(process_record, record, i, len(data_scenario2), zero_points): i for i, record in enumerate(data_scenario2)}
                 
                 for future in as_completed(future_to_idx):
                     idx = future_to_idx[future]
@@ -254,7 +254,7 @@ def analyze_data(input_file: str, limit: int = None, overconfident: bool = False
         # Process records in parallel using ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=20) as executor:
             # Submit all tasks
-            future_to_idx = {executor.submit(process_record, record, i, len(data)): i for i, record in enumerate(data)}
+            future_to_idx = {executor.submit(process_record, record, i, len(data),zero_points): i for i, record in enumerate(data)}
             
             # Process results as they complete
             for future in as_completed(future_to_idx):
@@ -296,6 +296,7 @@ def main():
     parser.add_argument("--underconfident", action="store_true", help="Filter for underconfident cases: p_true < 0.3 and correct = True")
     parser.add_argument("--zs-cot-compare", action="store_true", help="Run ZS vs CoT comparison analysis")
     parser.add_argument("--cot-file", help="Input CoT JSON file for ZS vs CoT comparison")
+    parser.add_argument("--zero-points", help="Includes zero points in the plot", action="store_true")
     
     args = parser.parse_args()
     
@@ -305,13 +306,13 @@ def main():
         print("Error: --overconfident, --underconfident, and --zs-cot-compare are mutually exclusive")
         return
     
-    # Check if zs_cot_compare requires cot_file
+    # Check if zs_cot_compare requires cot_file3
     if args.zs_cot_compare and not args.cot_file:
         print("Error: --zs-cot-compare requires --cot-file to be specified")
         return
     
     # Analyze the data
-    results = analyze_data(args.input, args.limit, args.overconfident, args.underconfident, args.zs_cot_compare, args.cot_file)
+    results = analyze_data(args.input, args.limit, args.overconfident, args.underconfident, args.zs_cot_compare, args.cot_file, args.zero_points)
     
     # Save results if requested
     if args.save_results:

@@ -7,3 +7,5 @@ models*/
 *.log
 *.pdf
 truthfulqa.json
+venv/
+llama.cpp/
