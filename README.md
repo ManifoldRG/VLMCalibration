@@ -1,6 +1,10 @@
 # VLMCalibration
 
-## Experiment Tracking for Calibration
+Please note that the following has been deprecated and a much wider set of experiments has been run whose results and uploaded in the repo as JSONs.
+
+We have also moved over from llama.cpp to vLLM for 16bit inferences - only quant-related experiments are run on llama.cpp now.
+
+## Experiment Tracking for Calibration (Deprecated)
 
 | **Model**                     | **gsm8k-zs** | **gsm8k-cot** | **mmlu-zs** | **mmlu-cot** | **medmcqa-zs** | **medmcqa-cot** | **simpleqa-zs** | **simpleqa-cot** |
 |:----------------------------------:|:---------:|:-------------:|:--------:|:------------:|:-------------:|:---------------:|:-------------:|:---------------:|
