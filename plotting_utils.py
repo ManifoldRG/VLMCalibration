@@ -13,6 +13,7 @@ from typing import Dict, List, Tuple
 MODEL_NAME_MAPPING = {
     'Llama-32-1B-Instruct': 'Llama 3.2 1B Instruct',
     'Llama-32-3B-Instruct': 'Llama 3.2 3B Instruct',
+    'Llama-31-8B-Instruct': 'Llama 3.1 8B Instruct',
     'Meta-Llama-31-8B-Instruct': 'Llama 3.1 8B Instruct',
 
     'gemma-2-2b-it': 'Gemma 2 2B Instruct',
@@ -31,6 +32,12 @@ MODEL_NAME_MAPPING = {
 EXP_TYPE_MAPPING = {
     'cot_exp': 'CoT Self Ask',
     'zs_exp': 'Direct Self Ask',
+    'verbalized': 'Verbalized Confidence',
+    'verbalized_cot': 'Verbalized Confidence + CoT',
+    'otherAI': 'Other AI Evaluation',
+    'otherAI_cot': 'Other AI Evaluation + CoT',
+    'otherAI_verbalized': 'Other AI Verbalized Confidence',
+    'otherAI_verbalized_cot': 'Other AI Verbalized Confidence + CoT',
 }
 
 # Standardized plot sizes
@@ -145,6 +152,9 @@ def discover_data_files(base_dirs: List[str], quant: bool = False) -> Dict[str, 
         # Filter out experiment_details files
         files = [f for f in files if 'experiment_details' not in os.path.basename(f)]
         
+        # Filter out files in archive or tracing folders
+        files = [f for f in files if "archive" not in f.lower() and "tracing" not in f.lower()]
+        
         # Filter GGUF files based on quant flag
         if not quant:
             files = [f for f in files if 'gguf' not in os.path.basename(f).lower()]
@@ -159,12 +169,55 @@ def parse_filename(filepath: str) -> Dict[str, str]:
     filename = os.path.basename(filepath)
     parts = filename.replace('.json', '').split('_')
     
-    # Extract components
-    exp_type = f"{parts[0]}_{parts[1]}"  # cot_exp or zs_exp
-    split = parts[3]     # train, val, test
+    # Handle different experiment type patterns
+    if len(parts) >= 2 and parts[0] in ['cot', 'zs'] and parts[1] == 'exp':
+        # Traditional format: cot_exp or zs_exp
+        exp_type = f"{parts[0]}_{parts[1]}"
+        records_idx = 2
+    elif len(parts) >= 3 and parts[0] == 'verbalized' and parts[1] == 'cot':
+        # verbalized_cot format
+        exp_type = "verbalized_cot"
+        records_idx = 2
+    elif len(parts) >= 3 and parts[0] == 'otherAI' and parts[1] == 'cot':
+        # otherAI_cot format
+        exp_type = "otherAI_cot"
+        records_idx = 2
+    elif len(parts) >= 4 and parts[0] == 'otherAI' and parts[1] == 'verbalized' and parts[2] == 'cot':
+        # otherAI_verbalized_cot format
+        exp_type = "otherAI_verbalized_cot"
+        records_idx = 3
+    elif len(parts) >= 3 and parts[0] == 'otherAI' and parts[1] == 'verbalized':
+        # otherAI_verbalized format
+        exp_type = "otherAI_verbalized"
+        records_idx = 2
+    elif parts[0] == 'verbalized':
+        # verbalized format
+        exp_type = "verbalized"
+        records_idx = 1
+    elif parts[0] == 'otherAI':
+        # otherAI format
+        exp_type = "otherAI"
+        records_idx = 1
+    else:
+        # Fallback to original logic for backward compatibility
+        exp_type = f"{parts[0]}_{parts[1]}" if len(parts) >= 2 else parts[0]
+        records_idx = 2
     
-    # Model name is everything after the fourth underscore
-    model_name = '_'.join(parts[4:])
+    # Find 'records' after the experiment type
+    actual_records_idx = None
+    for i in range(records_idx, len(parts)):
+        if parts[i] == 'records':
+            actual_records_idx = i
+            break
+    
+    if actual_records_idx is None:
+        # Fallback: assume records is at expected position
+        actual_records_idx = records_idx
+        split = parts[actual_records_idx + 1] if actual_records_idx + 1 < len(parts) else 'unknown'
+        model_name = '_'.join(parts[actual_records_idx + 2:]) if actual_records_idx + 2 < len(parts) else 'unknown'
+    else:
+        split = parts[actual_records_idx + 1]
+        model_name = '_'.join(parts[actual_records_idx + 2:])
     
     # Dataset is the parent directory name
     dataset = os.path.basename(os.path.dirname(filepath))
