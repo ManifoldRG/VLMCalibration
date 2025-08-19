@@ -7,3 +7,7 @@ models*/
 *.log
 *.pdf
 truthfulqa.json
+plots/
+summary_plots/
+family_analysis/
+test_plots/
