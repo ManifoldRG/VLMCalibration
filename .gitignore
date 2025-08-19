@@ -9,3 +9,7 @@ models*/
 truthfulqa.json
 venv/
 llama.cpp/
+plots/
+summary_plots/
+family_analysis/
+test_plots/

@@ -4,12 +4,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import os
+import json
+import glob
+import argparse
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 from plotting_utils import (
     SUMMARY_PLOT_SIZE, LARGE_PLOT_SIZE, MODEL_NAME_MAPPING,
     EXP_TYPE_MAPPING, FAMILY_COLORS, apply_clean_style, 
-    categorize_model_family, create_summary_dataframe
+    categorize_model_family, create_summary_dataframe,
+    discover_data_files, parse_filename, load_json_data
 )
 
 
@@ -39,7 +44,7 @@ def plots_across_families(all_data: Dict, save_dir: str = "family_analysis", qua
     
     print(f"🏠 Creating family-wise confidence distribution analysis...")
     print(f"   Datasets: {', '.join(datasets)}")
-    print(f"   Experiment types: {', '.join(['CoT' if exp == 'cot_exp' else 'ZS' for exp in exp_types])}")
+    print(f"   Experiment types: {', '.join([EXP_TYPE_MAPPING.get(exp, exp) for exp in exp_types])}")
     print(f"   Quantized models: {'Included' if quant else 'Excluded'}")
     
     # Create confidence distribution plots for each dataset and experiment type
@@ -47,7 +52,8 @@ def plots_across_families(all_data: Dict, save_dir: str = "family_analysis", qua
     
     for dataset in datasets:
         for exp_type in exp_types:
-            print(f"   📊 Processing {dataset.upper()} - {'CoT' if exp_type == 'cot_exp' else 'ZS'}...")
+            exp_name = EXP_TYPE_MAPPING.get(exp_type, exp_type)
+            print(f"   📊 Processing {dataset.upper()} - {exp_name}...")
             
             # Create confidence distribution plots for this dataset/experiment
             result = create_family_confidence_distributions(
@@ -75,8 +81,27 @@ def plots_across_families(all_data: Dict, save_dir: str = "family_analysis", qua
     # Group and display created plots
     for dataset in datasets:
         for exp_type in exp_types:
-            exp_short = "cot" if exp_type == "cot_exp" else "zs"
-            exp_name = EXP_TYPE_MAPPING[exp_type]
+            # Create shorter filename suffix based on experiment type
+            if exp_type == "cot_exp":
+                exp_short = "cot"
+            elif exp_type == "zs_exp":
+                exp_short = "zs"
+            elif exp_type == "verbalized":
+                exp_short = "verbalized"
+            elif exp_type == "verbalized_cot":
+                exp_short = "verbalized_cot"
+            elif exp_type == "otherAI":
+                exp_short = "otherAI"
+            elif exp_type == "otherAI_cot":
+                exp_short = "otherAI_cot"
+            elif exp_type == "otherAI_verbalized":
+                exp_short = "otherAI_verbalized"
+            elif exp_type == "otherAI_verbalized_cot":
+                exp_short = "otherAI_verbalized_cot"
+            else:
+                exp_short = exp_type
+            
+            exp_name = EXP_TYPE_MAPPING.get(exp_type, exp_type)
             print(f"   • {dataset.upper()} ({exp_name}):")
             print(f"     - family_confidence_correct_{dataset.lower()}_{exp_short}.pdf/png")
             print(f"     - family_confidence_incorrect_{dataset.lower()}_{exp_short}.pdf/png")
@@ -545,8 +570,27 @@ def create_family_confidence_distributions(all_data: Dict, dataset: str, exp_typ
         return
     
     # Determine experiment name for titles and filenames
-    exp_name = EXP_TYPE_MAPPING[exp_type]
-    exp_short = "cot" if exp_type == "cot_exp" else "zs"
+    exp_name = EXP_TYPE_MAPPING.get(exp_type, exp_type)
+    
+    # Create shorter filename suffix based on experiment type
+    if exp_type == "cot_exp":
+        exp_short = "cot"
+    elif exp_type == "zs_exp":
+        exp_short = "zs"
+    elif exp_type == "verbalized":
+        exp_short = "verbalized"
+    elif exp_type == "verbalized_cot":
+        exp_short = "verbalized_cot"
+    elif exp_type == "otherAI":
+        exp_short = "otherAI"
+    elif exp_type == "otherAI_cot":
+        exp_short = "otherAI_cot"
+    elif exp_type == "otherAI_verbalized":
+        exp_short = "otherAI_verbalized"
+    elif exp_type == "otherAI_verbalized_cot":
+        exp_short = "otherAI_verbalized_cot"
+    else:
+        exp_short = exp_type
     
     # Create separate plots for correct and incorrect confidence distributions
     bins = np.linspace(0, 1, 21)
@@ -732,4 +776,284 @@ def create_family_confidence_distributions(all_data: Dict, dataset: str, exp_typ
         stats_filename = f'family_confidence_stats_{dataset.lower()}_{exp_short}.csv'
         family_stats_df.to_csv(os.path.join(save_dir, stats_filename), index=False)
     
-    return filename_correct, filename_incorrect, filename_combined 
+    return filename_correct, filename_incorrect, filename_combined
+
+
+def load_experiment_results(base_dir: str = ".", quant: bool = False) -> Dict:
+    """Automatically discover and load all experiment results from the directory structure
+    
+    Args:
+        base_dir: Base directory to search for experiment results
+        quant: If True, only include quantized models. If False, only include non-quantized models.
+        
+    Returns:
+        Dictionary with experiment data in the format expected by plotting functions
+    """
+    all_data = {}
+    
+    if quant:
+        # For quantized models, search specifically in archive directories
+        base_dirs = []
+        archive_experiments = ['cot_exp', 'zs_exp', 'verbalized', 'verbalized_cot', 'otherAI', 'otherAI_cot', 'otherAI_verbalized', 'otherAI_verbalized_cot']
+        
+        for exp_type in archive_experiments:
+            archive_path = os.path.join(base_dir, 'archive', exp_type)
+            if os.path.exists(archive_path):
+                base_dirs.append(archive_path)
+        
+        # Also check if there are archive patterns directly
+        archive_patterns = [
+            os.path.join(base_dir, 'archive'),
+            os.path.join(base_dir, 'train_results_archive')
+        ]
+        for pattern in archive_patterns:
+            if os.path.exists(pattern):
+                # Find subdirectories that match experiment types
+                for item in os.listdir(pattern):
+                    item_path = os.path.join(pattern, item)
+                    if os.path.isdir(item_path) and item in archive_experiments:
+                        base_dirs.append(item_path)
+        
+        if not base_dirs:
+            print(f"❌ No archive directories found for quantized models in {base_dir}")
+            return {}
+        
+        print(f"🔍 Searching for quantized models in archive directories: {base_dirs}")
+        
+        # Manually discover GGUF files in archive directories
+        all_files = []
+        for archive_dir in base_dirs:
+            pattern = os.path.join(archive_dir, "*", "*_records_*.json")
+            files = glob.glob(pattern)
+            
+            # Filter to only GGUF files and exclude experiment_details
+            gguf_files = [f for f in files if 'gguf' in os.path.basename(f).lower() and 'experiment_details' not in os.path.basename(f)]
+            all_files.extend(gguf_files)
+            
+        print(f"🔍 Found {len(all_files)} GGUF files in archive directories")
+        
+    else:
+        # Define the experiment types we're looking for (same as generate_all_plots.py and summary_plots.py)
+        base_dirs = ['cot_exp', 'zs_exp', 'verbalized', 'verbalized_cot', 'otherAI', 'otherAI_cot']
+        
+        # Discover data files - exclude archive folders for non-quantized models
+        data_files = discover_data_files(base_dirs, quant=False)
+        
+        if not data_files:
+            print("❌ No data files found!")
+            return {}
+        
+        # Collect all file paths and filter out archive and tracing folders
+        all_files = []
+        for base_dir_name, files in data_files.items():
+            # Filter out both archive and tracing folders for non-quantized models
+            filtered_files = [f for f in files if "tracing" not in f.lower() and "archive" not in f.lower()]
+            all_files.extend(filtered_files)
+        
+        # Only keep non-quantized models (exclude GGUF files)
+        all_files = [f for f in all_files if not ('gguf' in f.lower() or 'q4' in f.lower() or 'q8' in f.lower())]
+        print(f"🔍 Found {len(all_files)} non-quantized model files (excluding archive and tracing folders)")
+    
+    if not all_files:
+        model_type = "quantized" if quant else "non-quantized"
+        print(f"❌ No {model_type} model files found!")
+        return {}
+    
+    # Process files
+    for filepath in all_files:
+        try:
+            metadata = parse_filename(filepath)
+            
+            # Skip train files
+            if metadata['split'] == 'train':
+                continue
+                
+            df = load_json_data(filepath, sample=False)
+            if df is None:
+                continue
+            
+            # Create key for all_data dictionary
+            key = f"{metadata['exp_type']}_{metadata['dataset']}_{metadata['split']}_{metadata['model_name']}"
+            all_data[key] = (df, metadata)
+            
+        except Exception as e:
+            print(f"❌ Error loading {filepath}: {e}")
+            continue
+    
+    model_type = "quantized" if quant else "non-quantized"
+    print(f"✅ Successfully loaded {len(all_data)} {model_type} model experiments")
+    return all_data
+
+
+def print_experiment_summary(all_data: Dict):
+    """Print a summary of loaded experiments"""
+    
+    if not all_data:
+        print("❌ No experiment data loaded")
+        return
+        
+    print(f"\n📊 Family Analysis - Experiment Summary:")
+    print(f"   Total experiments: {len(all_data)}")
+    
+    # Group by experiment type
+    exp_types = {}
+    datasets = set()
+    models = set()
+    
+    for key, (df, metadata) in all_data.items():
+        exp_type = metadata['exp_type']
+        dataset = metadata['dataset']
+        model = metadata['model_name']
+        
+        if exp_type not in exp_types:
+            exp_types[exp_type] = []
+        exp_types[exp_type].append(metadata)
+        
+        datasets.add(dataset)
+        models.add(model)
+    
+    print(f"   Experiment types: {list(exp_types.keys())}")
+    print(f"   Datasets: {sorted(datasets)}")
+    print(f"   Models: {len(models)} unique models")
+    
+    print(f"\n📋 Detailed breakdown:")
+    for exp_type, experiments in exp_types.items():
+        exp_name = EXP_TYPE_MAPPING.get(exp_type, exp_type)
+        print(f"   • {exp_name} ({exp_type}): {len(experiments)} experiments")
+        
+        # Group by dataset
+        dataset_counts = {}
+        for exp in experiments:
+            dataset = exp['dataset']
+            if dataset not in dataset_counts:
+                dataset_counts[dataset] = 0
+            dataset_counts[dataset] += 1
+        
+        for dataset, count in sorted(dataset_counts.items()):
+            print(f"     - {dataset}: {count} model(s)")
+
+
+def main():
+    """Main function with CLI interface"""
+    parser = argparse.ArgumentParser(
+        description="Generate family-wise analysis plots for model confidence calibration",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Analyze all non-quantized experiments in current directory
+  python family_plots.py
+  
+  # Analyze experiments in specific directory
+  python family_plots.py --base_dir /path/to/experiments
+  
+  # Analyze only quantized models
+  python family_plots.py --quant
+  
+  # Save plots to specific directory
+  python family_plots.py --output_dir my_family_analysis
+  
+  # Only show summary without generating plots
+  python family_plots.py --summary_only
+        """
+    )
+    
+    parser.add_argument(
+        "--base_dir",
+        type=str,
+        default=".",
+        help="Base directory to search for experiment results (default: current directory)"
+    )
+    
+    parser.add_argument(
+        "--output_dir", 
+        type=str,
+        default="family_analysis",
+        help="Directory to save output plots and analysis (default: family_analysis)"
+    )
+    
+    parser.add_argument(
+        "--quant",
+        action="store_true",
+        help="Analyze only GGUF quantized models (default: analyze only non-quantized models)"
+    )
+    
+    parser.add_argument(
+        "--summary_only",
+        action="store_true",
+        help="Only print experiment summary without generating plots"
+    )
+    
+    parser.add_argument(
+        "--verbose",
+        action="store_true", 
+        help="Print verbose output during processing"
+    )
+    
+    args = parser.parse_args()
+    
+    print("🏠 Model Family Confidence Analysis")
+    print("=" * 50)
+    
+    if args.quant:
+        print("⚖️  Analyzing only GGUF quantized models")
+    else:
+        print("🚫 Analyzing only non-quantized models (use --quant for quantized models only)")
+    
+    # Load experiment results
+    print(f"📂 Searching for experiments in: {os.path.abspath(args.base_dir)}")
+    all_data = load_experiment_results(args.base_dir, quant=args.quant)
+    
+    if not all_data:
+        model_type = "quantized" if args.quant else "non-quantized"
+        print(f"❌ No {model_type} experiment results found!")
+        print("\nMake sure you have run experiments and have the expected directory structure:")
+        print("  {exp_type}/{dataset}/{exp_type}_records_{split}_{model_name}.json")
+        print("\nSupported experiment types:")
+        print("  • cot_exp (Chain-of-Thought)")
+        print("  • zs_exp (Zero-Shot)")
+        print("  • verbalized (Verbalized Confidence)")
+        print("  • verbalized_cot (Verbalized Confidence with CoT)")
+        print("  • otherAI (Other AI Evaluation)")
+        print("  • otherAI_cot (Other AI Evaluation with CoT)")
+        if args.quant:
+            print("\nNote: Looking for quantized model files (containing 'gguf', 'q4', or 'q8')")
+        else:
+            print("\nNote: Excluding quantized model files. Use --quant to analyze quantized models only.")
+        return
+    
+    # Print summary
+    print_experiment_summary(all_data)
+    
+    if args.summary_only:
+        model_type = "quantized" if args.quant else "non-quantized"
+        print(f"\n✅ Summary complete for {model_type} models. Use without --summary_only to generate family plots.")
+        return
+    
+    # Generate family plots
+    print(f"\n🎨 Generating family analysis plots...")
+    print(f"   Output directory: {os.path.abspath(args.output_dir)}")
+    
+    try:
+        plots_across_families(all_data, args.output_dir, quant=args.quant)
+        model_type = "quantized" if args.quant else "non-quantized"
+        print(f"\n🎉 Family analysis complete for {model_type} models! Check '{args.output_dir}' for results.")
+        
+        # Print quick access info
+        print(f"\n📈 Key outputs:")
+        print(f"   • Family summary statistics: {args.output_dir}/family_summary_statistics.csv")
+        print(f"   • Family confidence overview: {args.output_dir}/family_confidence_overview.pdf")
+        print(f"   • Individual family plots by dataset and experiment type")
+        print(f"   • Family calibration analysis: {args.output_dir}/family_plots/")
+        
+    except Exception as e:
+        print(f"❌ Error generating family plots: {e}")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        return
+    
+    print(f"\n✅ Family analysis complete! 🏠")
+
+
+if __name__ == "__main__":
+    main() 

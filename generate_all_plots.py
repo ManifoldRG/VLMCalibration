@@ -24,8 +24,6 @@ from plotting_utils import (
 
 # Import specialized plot modules
 from summary_plots import create_summary_plots
-from family_plots import plots_across_families
-from single_model_plots import plots_for_single_model
 
 
 def create_confidence_histogram(df: pd.DataFrame, metadata: dict, 
@@ -91,7 +89,15 @@ def create_confidence_histogram(df: pd.DataFrame, metadata: dict,
         os.makedirs(save_dir, exist_ok=True)
         
         # Add experiment type prefix to filename
-        exp_prefix = "cot_" if metadata['exp_type'] == 'cot_exp' else "zs_"
+        exp_type_mapping = {
+            'cot_exp': 'cot',
+            'zs_exp': 'zs',
+            'verbalized': 'verbalized',
+            'verbalized_cot': 'verbalized_cot',
+            'otherAI': 'otherAI',
+            'otherAI_cot': 'otherAI_cot'
+        }
+        exp_prefix = exp_type_mapping.get(metadata['exp_type'], metadata['exp_type']) + "_"
         filename = f"{exp_prefix}confidence_histogram_{metadata['dataset']}_{metadata['split']}_{metadata['model_name']}.pdf"
         filepath = os.path.join(save_dir, filename)
         fig.savefig(filepath, dpi=300, bbox_inches='tight')
@@ -103,7 +109,7 @@ def create_confidence_histogram(df: pd.DataFrame, metadata: dict,
     return fig
 
 
-def process_single_file(filepath: str, sample: bool = True) -> tuple:
+def process_single_file(filepath: str) -> tuple:
     """Process a single data file and generate plots"""
     try:
         metadata = parse_filename(filepath)
@@ -112,12 +118,20 @@ def process_single_file(filepath: str, sample: bool = True) -> tuple:
         if metadata['split'] == 'train':
             return filepath, None, False
         
-        df = load_json_data(filepath, sample=sample)
+        df = load_json_data(filepath, sample=False)
         if df is None:
             return filepath, None, False
         
         # Create output directories for density and raw plots
-        exp_short = "cot" if metadata['exp_type'] == "cot_exp" else "zs"
+        exp_type_mapping = {
+            'cot_exp': 'cot',
+            'zs_exp': 'zs',
+            'verbalized': 'verbalized',
+            'verbalized_cot': 'verbalized_cot',
+            'otherAI': 'otherAI',
+            'otherAI_cot': 'otherAI_cot'
+        }
+        exp_short = exp_type_mapping.get(metadata['exp_type'], metadata['exp_type'])
         density_dir = os.path.join("plots", exp_short, "density", metadata['dataset'])
         raw_dir = os.path.join("plots", exp_short, "raw", metadata['dataset'])
         
@@ -148,63 +162,38 @@ def show_help():
     print()
     print("OPTIONS:")
     print("  -h, --help           Show this help message")
-    print("  -s, --summary-only   Generate only summary plots (no individual histograms)")
-    print("  -f, --family-only    Generate only family analysis plots")
-    print("  -m, --model MODEL    Generate plots for a specific model only")
-    print("  -l, --list-models    List all available models and exit")
     print("  -q, --quant          Include GGUF quantized models (excluded by default)")
-    print("  --no-sample          Load all data (default: sample max 1000 records per file)")
     print()
     print("EXAMPLES:")
     print("  # Generate all plots (default)")
     print("  python generate_all_plots.py")
     print()
-    print("  # Generate only summary plots")
-    print("  python generate_all_plots.py --summary-only")
-    print()
-    print("  # Generate family analysis plots only")
-    print("  python generate_all_plots.py --family-only")
-    print()
-    print("  # Analyze a specific model")
-    print("  python generate_all_plots.py --model llama-2-7b-chat")
-    print()
-    print("  # List available models")
-    print("  python generate_all_plots.py --list-models")
-    print()
     print("  # Include quantized models")
     print("  python generate_all_plots.py --quant")
     print()
-    print("  # Load all data without sampling")
-    print("  python generate_all_plots.py --no-sample")
-    print()
     print("OUTPUT DIRECTORIES:")
     print("  📂 plots/                    Individual confidence histograms")
-    print("  📂 summary_plots/            Summary and comparison plots")
-    print("  📂 family_analysis/          Family-wise analysis plots")
-    print("  📂 single_model_analysis/    Single model analysis plots")
     print()
     print("💡 All plots are saved in both PDF (vector) and PNG (raster) formats")
+    print()
+    print("SUPPORTED EXPERIMENT TYPES:")
+    print("  • cot_exp                    Chain-of-thought experiments")
+    print("  • zs_exp                     Zero-shot experiments")
+    print("  • verbalized                 Verbalized confidence experiments")
+    print("  • verbalized_cot             Verbalized confidence with CoT")
+    print("  • otherAI                    Other AI evaluation experiments")
+    print("  • otherAI_cot                Other AI evaluation with CoT")
 
 
-def main(summary_only: bool = False, quant: bool = False, family_only: bool = False, 
-         sample: bool = True, model_name: str = None):
-    """Main function to generate all plots
+def main(quant: bool = False):
+    """Main function to generate confidence histogram plots
     
     Args:
-        summary_only: If True, only generate summary plots without individual confidence histograms
         quant: If False (default), exclude GGUF quantized models. If True, include them.
-        family_only: If True, only generate family analysis plots
-        sample: If True (default), sample max 1000 records per file. If False, load all data.
-        model_name: If provided, only generate plots for this specific model
     """
     
     # Setup publication style
     setup_publication_style()
-    
-    if sample:
-        print("🎲 Using deterministic sampling: max 1000 records per file (random_state=42)")
-    else:
-        print("📊 Loading all data (no sampling)")
     
     if not quant:
         print("🚫 Excluding GGUF quantized models (use --quant to include them)")
@@ -212,43 +201,38 @@ def main(summary_only: bool = False, quant: bool = False, family_only: bool = Fa
         print("✅ Including GGUF quantized models")
     
     # Discover all data files
-    base_dirs = ['cot_exp', 'zs_exp']
+    base_dirs = ['cot_exp', 'zs_exp', 'verbalized', 'verbalized_cot', 'otherAI', 'otherAI_cot']
     data_files = discover_data_files(base_dirs, quant=quant)
     
     if not data_files:
         print("❌ No data files found!")
         return
     
-    # Collect all file paths
+    # Collect all file paths and filter out archive folders
     all_files = []
     for base_dir, files in data_files.items():
-        all_files.extend(files)
+        # Filter out files in archive or tracing folders
+        filtered_files = [f for f in files if "archive" not in f.lower() and "tracing" not in f.lower()]
+        all_files.extend(filtered_files)
     
-    print(f"📊 Found {len(all_files)} data files across {len(data_files)} experiment types")
-    
-    # Choose processing function based on mode
-    process_func = process_data_only if (summary_only or family_only or model_name) else process_single_file
-    mode_description = "Processing data for analysis" if (summary_only or family_only or model_name) else "Processing files"
+    print(f"📊 Found {len(all_files)} data files across {len(data_files)} experiment types (excluding archive and tracing folders)")
     
     # Process all files with ThreadPoolExecutor
-    all_data = {}
     failed_files = []
     
     with ThreadPoolExecutor(max_workers=20) as executor:
-        # Submit all tasks with sample parameter
-        future_to_file = {executor.submit(process_func, filepath, sample): filepath 
+        # Submit all tasks
+        future_to_file = {executor.submit(process_single_file, filepath): filepath 
                          for filepath in all_files}
         
         # Process completed tasks with progress bar
-        with tqdm(total=len(all_files), desc=mode_description, unit="file") as pbar:
+        with tqdm(total=len(all_files), desc="Processing files", unit="file") as pbar:
             for future in as_completed(future_to_file):
                 filepath = future_to_file[future]
                 try:
                     result_filepath, data_result, success = future.result()
                     
                     if success and data_result is not None:
-                        key, (df, metadata) = data_result
-                        all_data[key] = (df, metadata)
                         pbar.set_postfix_str(f"✅ {os.path.basename(filepath)}")
                     else:
                         failed_files.append(result_filepath)
@@ -260,21 +244,10 @@ def main(summary_only: bool = False, quant: bool = False, family_only: bool = Fa
                 
                 pbar.update(1)
     
-    # Generate plots based on mode
-    if model_name:
-        print(f"🤖 Creating single model analysis plots for: {model_name}")
-        plots_for_single_model(all_data, model_name, quant=quant)
-    elif family_only:
-        print("🏠 Creating family analysis plots...")
-        plots_across_families(all_data, quant=quant)
-    else:
-        # Create summary plots
-        print("📈 Creating summary plots...")
-        create_summary_plots(all_data)
-    
     # Print summary
+    successful_files = len(all_files) - len(failed_files)
     print(f"\n✅ Processing complete!")
-    print(f"   Successfully processed: {len(all_data)} files")
+    print(f"   Successfully processed: {successful_files} files")
     print(f"   Failed files: {len(failed_files)}")
     
     if failed_files:
@@ -282,19 +255,19 @@ def main(summary_only: bool = False, quant: bool = False, family_only: bool = Fa
         for f in failed_files:
             print(f"     {f}")
     
-    if model_name:
-        print(f"\n📁 Single model analysis plots saved in 'single_model_analysis/' directory")
-    elif family_only:
-        print(f"\n📁 Family analysis plots saved in 'family_analysis/' directory")
-    elif summary_only:
-        print(f"\n📁 Summary plots saved in 'summary_plots/' directory")
-    else:
-        print(f"\n📁 Plots saved in organized structure:")
-        print(f"   📂 plots/cot/density/{'{dataset}'}/")
-        print(f"   📂 plots/cot/raw/{'{dataset}'}/")
-        print(f"   📂 plots/zs/density/{'{dataset}'}/")
-        print(f"   📂 plots/zs/raw/{'{dataset}'}/")
-        print(f"📁 Summary plots saved in 'summary_plots/' directory")
+    print(f"\n📁 Plots saved in organized structure:")
+    print(f"   📂 plots/cot/density/{'{dataset}'}/")
+    print(f"   📂 plots/cot/raw/{'{dataset}'}/")
+    print(f"   📂 plots/zs/density/{'{dataset}'}/")
+    print(f"   📂 plots/zs/raw/{'{dataset}'}/")
+    print(f"   📂 plots/verbalized/density/{'{dataset}'}/")
+    print(f"   📂 plots/verbalized/raw/{'{dataset}'}/")
+    print(f"   📂 plots/verbalized_cot/density/{'{dataset}'}/")
+    print(f"   📂 plots/verbalized_cot/raw/{'{dataset}'}/")
+    print(f"   📂 plots/otherAI/density/{'{dataset}'}/")
+    print(f"   📂 plots/otherAI/raw/{'{dataset}'}/")
+    print(f"   📂 plots/otherAI_cot/density/{'{dataset}'}/")
+    print(f"   📂 plots/otherAI_cot/raw/{'{dataset}'}/")
     
     print(f"💡 All plots are saved in both PDF (vector) and PNG (raster) formats")
 
@@ -308,71 +281,6 @@ if __name__ == "__main__":
         sys.exit(0)
     
     # Check for flags
-    summary_only = "--summary-only" in sys.argv or "-s" in sys.argv
     quant = "--quant" in sys.argv or "-q" in sys.argv
-    family_only = "--family-only" in sys.argv or "-f" in sys.argv
-    no_sample = "--no-sample" in sys.argv
-    list_models = "--list-models" in sys.argv or "-l" in sys.argv
     
-    # Check for model name
-    model_name = None
-    for i, arg in enumerate(sys.argv):
-        if arg == "--model" or arg == "-m":
-            if i + 1 < len(sys.argv):
-                model_name = sys.argv[i + 1]
-                break
-    
-    # Handle list models request
-    if list_models:
-        print("📋 Discovering available models...")
-        base_dirs = ['cot_exp', 'zs_exp']
-        available_models = list_available_models(base_dirs, quant=quant)
-        
-        if not available_models:
-            print("❌ No models found in the data files!")
-        else:
-            print(f"✅ Found {len(available_models)} unique models:")
-            print(f"   Quantized models: {'Included' if quant else 'Excluded'}")
-            print()
-            
-            # Group by family for better organization
-            family_groups = {}
-            for model in available_models:
-                family = categorize_model_family(model)
-                if family not in family_groups:
-                    family_groups[family] = []
-                family_groups[family].append(model)
-            
-            for family in sorted(family_groups.keys()):
-                print(f"🏠 {family} Family:")
-                for model in sorted(family_groups[family]):
-                    print(f"   • {model}")
-                print()
-            
-            print("💡 Use --model <model_name> to analyze a specific model")
-            print("💡 Use --quant to include/exclude quantized models")
-        
-        sys.exit(0)
-    
-    # Validate flag combinations
-    exclusive_flags = [summary_only, family_only, bool(model_name)]
-    if sum(exclusive_flags) > 1:
-        print("❌ Cannot use multiple exclusive flags together:")
-        print("   --summary-only (-s): Generate only summary plots")
-        print("   --family-only (-f): Generate only family analysis plots")
-        print("   --model (-m): Generate plots for a single model")
-        print("   --list-models (-l): List all available models")
-        sys.exit(1)
-    
-    if model_name:
-        print(f"🎯 Running in single model mode for: {model_name}")
-    elif family_only:
-        print("🎯 Running in family-only mode (family analysis plots only)")
-    elif summary_only:
-        print("🎯 Running in summary-only mode (no individual confidence histograms)")
-    
-    if no_sample:
-        print("🎯 Running with --no-sample flag (loading all data)")
-    
-    main(summary_only=summary_only, quant=quant, family_only=family_only, 
-         sample=not no_sample, model_name=model_name)
+    main(quant=quant)

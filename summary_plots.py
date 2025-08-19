@@ -7,6 +7,10 @@ import os
 from typing import Dict
 import seaborn as sns
 import alphashape
+import json
+import glob
+import argparse
+from pathlib import Path
 
 from plotting_utils import (
     SUMMARY_PLOT_SIZE, LARGE_PLOT_SIZE, MODEL_NAME_MAPPING,
@@ -26,6 +30,11 @@ def calculate_ece(df: pd.DataFrame, n_bins: int = 10) -> float:
     """
     if len(df) == 0:
         return np.nan
+    
+    # Ensure 'correct' column is boolean/numeric
+    df = df.copy()
+    if df['correct'].dtype == 'object':
+        df['correct'] = df['correct'].astype(bool)
         
     bin_edges = np.linspace(0, 1, n_bins + 1)
     ece = 0
@@ -38,7 +47,7 @@ def calculate_ece(df: pd.DataFrame, n_bins: int = 10) -> float:
             mask = (df['p_true'] >= bin_edges[i]) & (df['p_true'] < bin_edges[i+1])
         
         if mask.sum() > 0:
-            bin_acc = df[mask]['correct'].mean()
+            bin_acc = df[mask]['correct'].astype(float).mean()
             bin_conf = df[mask]['p_true'].mean()
             bin_weight = mask.sum() / len(df)
             ece += bin_weight * abs(bin_acc - bin_conf)
@@ -58,6 +67,11 @@ def calculate_brier_score(df: pd.DataFrame) -> float:
     if len(df) == 0:
         return np.nan
     
+    # Ensure 'correct' column is boolean/numeric
+    df = df.copy()
+    if df['correct'].dtype == 'object':
+        df['correct'] = df['correct'].astype(bool)
+    
     return np.mean((df['p_true'] - df['correct'].astype(float)) ** 2)
 
 
@@ -74,9 +88,14 @@ def calculate_overconfidence_rate(df: pd.DataFrame, threshold: float = 0.05) -> 
     if len(df) == 0:
         return np.nan
     
+    # Ensure 'correct' column is boolean/numeric
+    df = df.copy()
+    if df['correct'].dtype == 'object':
+        df['correct'] = df['correct'].astype(bool)
+    
     # For each prediction, compare confidence to accuracy
     # This is a simplified version - proper overconfidence needs binning
-    accuracy = df['correct'].mean()
+    accuracy = df['correct'].astype(float).mean()
     overconfident_mask = df['p_true'] > (accuracy + threshold)
     return overconfident_mask.mean()
 
@@ -90,6 +109,11 @@ def create_enhanced_summary_dataframe(all_data: Dict) -> pd.DataFrame:
         df, metadata = df_info
         if df is None:
             continue
+        
+        # Ensure 'correct' column is boolean/numeric
+        df = df.copy()
+        if df['correct'].dtype == 'object':
+            df['correct'] = df['correct'].astype(bool)
             
         correct_data = df[df['correct'] == True]['p_true']
         incorrect_data = df[df['correct'] == False]['p_true']
@@ -104,7 +128,7 @@ def create_enhanced_summary_dataframe(all_data: Dict) -> pd.DataFrame:
             'dataset': metadata['dataset'], 
             'split': metadata['split'],
             'exp_type': metadata['exp_type'],
-            'accuracy': (df['correct'] == True).mean(),
+            'accuracy': df['correct'].astype(float).mean(),
             'ece': ece,
             'brier_score': brier_score,
             'overconfidence_rate': overconf_rate,
@@ -118,7 +142,7 @@ def create_enhanced_summary_dataframe(all_data: Dict) -> pd.DataFrame:
 
 
 def create_performance_landscape_with_alphashapes(summary_df: pd.DataFrame, exp_type: str, save_dir: str):
-    """Create accuracy vs ECE landscape with alpha shapes showing performance regions"""
+    """Create accuracy vs ECE landscape with clean non-overlapping performance regions"""
     
     exp_data = summary_df[summary_df['exp_type'] == exp_type].copy()
     
@@ -131,19 +155,7 @@ def create_performance_landscape_with_alphashapes(summary_df: pd.DataFrame, exp_
     # Create the plot
     fig, ax = plt.subplots(figsize=LARGE_PLOT_SIZE)
     
-    # Get unique datasets and models for coloring
-    datasets = sorted(exp_data['dataset'].unique())
-    models = sorted(exp_data['model'].unique())
-    
-    # Create color palette for datasets
-    dataset_colors = plt.cm.Set1(np.linspace(0, 1, len(datasets)))
-    dataset_color_map = {dataset: dataset_colors[i] for i, dataset in enumerate(datasets)}
-    
-    # Create marker styles for models
-    markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h', 'H', '+', 'x', '8']
-    model_marker_map = {model: markers[i % len(markers)] for i, model in enumerate(models)}
-    
-    # Plot density background using hexbin
+    # Get clean data
     x_data = exp_data['accuracy'].values
     y_data = exp_data['ece'].values
     
@@ -153,121 +165,198 @@ def create_performance_landscape_with_alphashapes(summary_df: pd.DataFrame, exp_
     y_data = y_data[valid_mask]
     exp_data_clean = exp_data[valid_mask]
     
-    if len(x_data) > 5:  # Need minimum points for hexbin
-        hb = ax.hexbin(x_data, y_data, gridsize=15, cmap='Blues', alpha=0.3, 
-                       extent=[0, 1, 0, max(0.5, y_data.max() * 1.1)])
-        
-        # Add alpha shapes if available and we have enough points
-        if len(x_data) >= 4:
-            try:
-                points = np.column_stack([x_data, y_data])
-                
-                # Create alpha shape for overall performance boundary
-                alpha_shape = alphashape.alphashape(points, alpha=0.1)
-                
-                if hasattr(alpha_shape, 'exterior'):
-                    # It's a polygon
-                    x_boundary, y_boundary = alpha_shape.exterior.xy
-                    ax.plot(x_boundary, y_boundary, 'k--', alpha=0.6, linewidth=2, 
-                           label='Performance Boundary')
-                elif hasattr(alpha_shape, 'geoms'):
-                    # It's a collection of geometries
-                    for geom in alpha_shape.geoms:
-                        if hasattr(geom, 'exterior'):
-                            x_boundary, y_boundary = geom.exterior.xy
-                            ax.plot(x_boundary, y_boundary, 'k--', alpha=0.6, linewidth=2)
-                
-            except Exception as e:
-                print(f"⚠️  Alpha shape calculation failed: {e}")
+    if len(x_data) < 4:
+        print(f"⚠️  Not enough data points for performance landscape ({len(x_data)} points)")
+        return
     
-    # Plot individual points
-    for _, row in exp_data_clean.iterrows():
-        color = dataset_color_map[row['dataset']]
-        marker = model_marker_map[row['model']]
+    # Create background density using 2D histogram for smooth regions
+    if len(x_data) >= 10:
+        # Create a 2D histogram for background density
+        hist, xedges, yedges = np.histogram2d(x_data, y_data, bins=15, density=True)
+        extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
         
-        ax.scatter(row['accuracy'], row['ece'], 
-                  c=[color], marker=marker, s=80, alpha=0.8, 
-                  edgecolors='black', linewidth=0.5)
+        # Plot as a smooth background
+        im = ax.imshow(hist.T, origin='lower', extent=extent, aspect='auto', 
+                      cmap='Blues', alpha=0.3, interpolation='gaussian')
     
-    # Add "ideal performance" indicators
-    # Perfect calibration line (ECE = 0)
-    ax.axhline(y=0, color='green', linestyle='-', alpha=0.5, linewidth=2, 
+    # Define performance quadrants using data-driven thresholds
+    acc_median = np.median(x_data)
+    ece_median = np.median(y_data)
+    
+    # Create clean quadrant boundaries
+    ax.axvline(x=acc_median, color='gray', linestyle='--', alpha=0.6, linewidth=1.5, 
+               label=f'Median Accuracy ({acc_median:.2f})')
+    ax.axhline(y=ece_median, color='gray', linestyle='--', alpha=0.6, linewidth=1.5,
+               label=f'Median ECE ({ece_median:.3f})')
+    
+    # Add perfect calibration reference
+    ax.axhline(y=0, color='darkgreen', linestyle='-', alpha=0.8, linewidth=3, 
                label='Perfect Calibration (ECE=0)')
     
-    # Good performance region (high accuracy, low ECE)
-    if len(y_data) > 0:
-        good_ece_threshold = np.percentile(y_data, 25)  # Bottom quartile of ECE
-        good_acc_threshold = np.percentile(x_data, 75)  # Top quartile of accuracy
-        
-        # Highlight good performance region
-        ax.axvspan(good_acc_threshold, 1, ymin=0, ymax=good_ece_threshold/ax.get_ylim()[1], 
-                   alpha=0.2, color='green', label=f'High Performance Region')
+    # Color-code quadrants with non-overlapping backgrounds
+    xlim = [max(0, x_data.min() - 0.05), min(1, x_data.max() + 0.05)]
+    ylim = [max(0, y_data.min() - 0.01), y_data.max() + 0.02]
     
-    # Create legends
-    # Dataset legend (colors)
+    # High Accuracy, Good Calibration (bottom-right quadrant)
+    ax.fill([acc_median, xlim[1], xlim[1], acc_median], [ylim[0], ylim[0], ece_median, ece_median], 
+            color='lightgreen', alpha=0.15, label='High Acc, Good Cal')
+    
+    # High Accuracy, Poor Calibration (top-right quadrant) 
+    ax.fill([acc_median, xlim[1], xlim[1], acc_median], [ece_median, ece_median, ylim[1], ylim[1]],
+            color='wheat', alpha=0.15, label='High Acc, Poor Cal')
+    
+    # Low Accuracy, Good Calibration (bottom-left quadrant)
+    ax.fill([xlim[0], acc_median, acc_median, xlim[0]], [ylim[0], ylim[0], ece_median, ece_median],
+            color='lightblue', alpha=0.15, label='Low Acc, Good Cal')
+    
+    # Low Accuracy, Poor Calibration (top-left quadrant)
+    ax.fill([xlim[0], acc_median, acc_median, xlim[0]], [ece_median, ece_median, ylim[1], ylim[1]],
+            color='mistyrose', alpha=0.15, label='Low Acc, Poor Cal')
+    
+    # Extract model families and create color mapping
+    model_families = []
+    for model in exp_data_clean['model']:
+        # Extract model family from model name
+        if 'gpt' in model.lower():
+            family = 'GPT'
+        elif 'claude' in model.lower():
+            family = 'Claude'
+        elif 'llama' in model.lower():
+            family = 'LLaMA'
+        elif 'gemini' in model.lower() or 'gemma' in model.lower():
+            family = 'Gemini/Gemma'
+        elif 'qwen' in model.lower():
+            family = 'Qwen'
+        elif 'mistral' in model.lower():
+            family = 'Mistral'
+        elif 'phi' in model.lower():
+            family = 'Phi'
+        else:
+            family = 'Other'
+        model_families.append(family)
+    
+    exp_data_clean = exp_data_clean.copy()
+    exp_data_clean['model_family'] = model_families
+    
+    # Create color mapping for model families
+    unique_families = sorted(list(set(model_families)))
+    family_colors = plt.cm.Set1(np.linspace(0, 1, len(unique_families)))
+    family_color_map = {family: family_colors[i] for i, family in enumerate(unique_families)}
+    
+    # Create marker mapping for datasets
+    datasets = exp_data_clean['dataset'].unique()
+    markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h']
+    dataset_marker_map = {dataset: markers[i % len(markers)] for i, dataset in enumerate(datasets)}
+    
+    # Plot points with model family colors and dataset markers
+    for _, row in exp_data_clean.iterrows():
+        color = family_color_map[row['model_family']]
+        marker = dataset_marker_map[row['dataset']]
+        
+        # Check if marker is filled or unfilled
+        unfilled_markers = {'+', 'x', '|', '_', 'X'}
+        linewidth = 0 if marker in unfilled_markers else 0.5
+        
+        ax.scatter(row['accuracy'], row['ece'], 
+                  c=[color], marker=marker, s=80, 
+                  alpha=0.8, linewidth=linewidth,
+                  zorder=10)
+    
+    # Add quadrant labels with better positioning
+    ax.text(0.98, 0.02, 'High Accuracy\nPoor Calibration', 
+            transform=ax.transAxes, ha='right', va='bottom',
+            bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.8),
+            fontsize=10, fontweight='bold')
+    
+    ax.text(0.02, 0.02, 'Low Accuracy\nPoor Calibration', 
+            transform=ax.transAxes, ha='left', va='bottom',
+            bbox=dict(boxstyle='round,pad=0.3', facecolor='mistyrose', alpha=0.8),
+            fontsize=10, fontweight='bold')
+    
+    ax.text(0.98, 0.98, 'High Accuracy\nGood Calibration', 
+            transform=ax.transAxes, ha='right', va='top',
+            bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.8),
+            fontsize=10, fontweight='bold')
+    
+    ax.text(0.02, 0.98, 'Low Accuracy\nGood Calibration', 
+            transform=ax.transAxes, ha='left', va='top',
+            bbox=dict(boxstyle='round,pad=0.3', facecolor='lightblue', alpha=0.8),
+            fontsize=10, fontweight='bold')
+    
+    # Create model family legend
+    family_handles = []
+    for family in unique_families:
+        handle = plt.Line2D([0], [0], marker='o', color='w', 
+                           markerfacecolor=family_color_map[family], 
+                           markersize=8, alpha=0.8,
+                           markeredgewidth=0.5, label=family)
+        family_handles.append(handle)
+    
+    family_legend = ax.legend(handles=family_handles, loc='center left', 
+                             bbox_to_anchor=(1.05, 0.7),
+                             title='Model Families', frameon=True, fancybox=False,
+                             edgecolor='#cccccc', facecolor='white', framealpha=0.9,
+                             title_fontsize=11, fontsize=10)
+    family_legend.get_frame().set_linewidth(0.5)
+    
+    # Create dataset legend (markers)
     dataset_handles = []
     for dataset in datasets:
-        handle = plt.Line2D([0], [0], marker='o', color='w', 
-                           markerfacecolor=dataset_color_map[dataset], 
-                           markersize=8, alpha=0.8, markeredgecolor='black',
-                           markeredgewidth=0.5, label=dataset.upper())
+        handle = plt.Line2D([0], [0], marker=dataset_marker_map[dataset], color='w', 
+                           markerfacecolor='gray', markersize=8, alpha=0.8,
+                           markeredgewidth=0.5, 
+                           label=dataset.upper())
         dataset_handles.append(handle)
     
-    # Model legend (markers) - show only first few to avoid clutter
-    model_handles = []
-    for i, model in enumerate(models[:8]):  # Limit to first 8 models
-        # Use MODEL_NAME_MAPPING for consistent display names
-        model_display = MODEL_NAME_MAPPING.get(model, model)
-        if len(model_display) > 15:
-            model_display = model_display[:12] + '...'
-        
-        handle = plt.Line2D([0], [0], marker=model_marker_map[model], color='w',
-                           markerfacecolor='gray', markersize=8, alpha=0.8,
-                           markeredgecolor='black', markeredgewidth=0.5,
-                           label=model_display)
-        model_handles.append(handle)
-    
-    if len(models) > 8:
-        model_handles.append(plt.Line2D([0], [0], marker='', color='w', 
-                                       label=f'... and {len(models)-8} more'))
-    
-    # Add legends
-    dataset_legend = ax.legend(handles=dataset_handles, loc='upper left', 
+    dataset_legend = ax.legend(handles=dataset_handles, loc='center left', 
+                              bbox_to_anchor=(1.05, 0.3),
                               title='Datasets', frameon=True, fancybox=False,
                               edgecolor='#cccccc', facecolor='white', 
-                              framealpha=0.9, title_fontsize=10)
+                              framealpha=0.9, title_fontsize=11, fontsize=10)
     dataset_legend.get_frame().set_linewidth(0.5)
+    ax.add_artist(family_legend)  # Keep both legends
     
-    # Add performance indicators legend
-    perf_handles = [plt.Line2D([0], [0], color='green', linestyle='-', alpha=0.5, 
-                               linewidth=2, label='Perfect Calibration')]
-    perf_handles.append(plt.Line2D([0], [0], color='k', linestyle='--', alpha=0.6, 
-                                    linewidth=2, label='Performance Boundary'))
+    # Add reference lines legend
+    ref_handles = [
+        plt.Line2D([0], [0], color='darkgreen', linestyle='-', alpha=0.8, 
+                   linewidth=3, label='Perfect Calibration'),
+        plt.Line2D([0], [0], color='gray', linestyle='--', alpha=0.6, 
+                   linewidth=1.5, label='Data Medians')
+    ]
     
-    perf_legend = ax.legend(handles=perf_handles, loc='upper right', 
-                           title='Performance Indicators', frameon=True, fancybox=False,
-                           edgecolor='#cccccc', facecolor='white', framealpha=0.9)
-    perf_legend.get_frame().set_linewidth(0.5)
-    ax.add_artist(dataset_legend)  # Keep both legends
+    ref_legend = ax.legend(handles=ref_handles, loc='upper left', 
+                          title='Reference Lines', frameon=True, fancybox=False,
+                          edgecolor='#cccccc', facecolor='white', framealpha=0.9,
+                          title_fontsize=11, fontsize=10)
+    ref_legend.get_frame().set_linewidth(0.5)
+    ax.add_artist(dataset_legend)  # Keep all three legends
+    ax.add_artist(family_legend)
     
     apply_clean_style(ax)
-    ax.set_xlabel('Accuracy', fontweight='normal')
-    ax.set_ylabel('Expected Calibration Error (ECE)', fontweight='normal')
-    ax.set_title(f'Model Performance Landscape - {exp_name}\nAccuracy vs Calibration Quality', 
-                 fontweight='normal', pad=15)
+    ax.set_xlabel('Accuracy', fontweight='normal', fontsize=12)
+    ax.set_ylabel('Expected Calibration Error (ECE)', fontweight='normal', fontsize=12)
+    ax.set_title(f'Model Performance Landscape - {exp_name}\nModel Families Across Accuracy vs Calibration Space', 
+                 fontweight='normal', pad=15, fontsize=14)
     
-    # Set reasonable axis limits
-    ax.set_xlim(0, 1)
-    if len(y_data) > 0:
-        ax.set_ylim(0, max(0.3, y_data.max() * 1.1))
+    # Set axis limits
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
     
-    # Add grid for better readability
-    ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+    # Add subtle grid
+    ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.5)
     
-    plt.tight_layout()
+    # Adjust layout to accommodate legends
+    plt.subplots_adjust(right=0.72)
+    
     fig.savefig(os.path.join(save_dir, f'{exp_short}_performance_landscape.pdf'), dpi=300, bbox_inches='tight')
     fig.savefig(os.path.join(save_dir, f'{exp_short}_performance_landscape.png'), dpi=300, bbox_inches='tight')
     plt.close(fig)
+    
+    # Print summary of model families found
+    family_counts = pd.Series(model_families).value_counts()
+    print(f"📊 Model families in {exp_name}:")
+    for family, count in family_counts.items():
+        print(f"   • {family}: {count} models")
 
 
 def create_cross_dataset_consistency(summary_df: pd.DataFrame, save_dir: str):
@@ -313,7 +402,7 @@ def create_cross_dataset_consistency(summary_df: pd.DataFrame, save_dir: str):
                     # Add trend line if enough points
                     if len(x_data) > 5:
                         sns.regplot(data=dataset_data[valid_mask], x='accuracy', y='ece', 
-                                  scatter=False, ax=ax, color='red', alpha=0.5)
+                                  scatter=False, ax=ax, color='red')
                 
                 # Add perfect calibration reference
                 ax.axhline(y=0, color='green', linestyle='--', alpha=0.5, linewidth=1)
@@ -430,7 +519,7 @@ def create_calibration_metrics_comparison(summary_df: pd.DataFrame, save_dir: st
     
     # Plot 4: Scatter plot of improvements
     ax4.scatter(comparison_df['accuracy_improvement'], comparison_df['ece_improvement'], 
-               alpha=0.7, s=60, edgecolors='black', linewidth=0.5)
+               alpha=0.7, s=60, linewidth=0.5)
     
     # Add quadrant lines
     ax4.axhline(y=0, color='black', linestyle='-', alpha=0.3, linewidth=1)
@@ -571,9 +660,13 @@ def create_per_dataset_summary(summary_df: pd.DataFrame, save_dir: str):
             color = exp_colors.get(row['exp_type'], '#888888')
             marker = model_marker_map[row['model']]
             
+            # Check if marker is filled or unfilled
+            unfilled_markers = {'+', 'x', '|', '_', 'X'}
+            linewidth = 0 if marker in unfilled_markers else 0.5
+            
             ax.scatter(row['mean_conf_correct'], row['mean_conf_incorrect'], 
                       c=[color], marker=marker, s=100, alpha=0.8, 
-                      edgecolors='black', linewidth=0.5)
+                      linewidth=linewidth)
         
         # Add diagonal line (perfect calibration would be mean_conf_correct = mean_conf_incorrect)
         lims = [
@@ -589,7 +682,7 @@ def create_per_dataset_summary(summary_df: pd.DataFrame, save_dir: str):
             if exp_type in exp_colors:
                 handle = plt.Line2D([0], [0], marker='o', color='w', 
                                    markerfacecolor=exp_colors[exp_type], 
-                                   markersize=10, alpha=0.8, markeredgecolor='black',
+                                   markersize=10, alpha=0.8,
                                    markeredgewidth=0.5, label=exp_names[exp_type])
                 exp_handles.append(handle)
         
@@ -601,7 +694,7 @@ def create_per_dataset_summary(summary_df: pd.DataFrame, save_dir: str):
             
             handle = plt.Line2D([0], [0], marker=model_marker_map[model], color='w',
                                markerfacecolor='gray', markersize=8, alpha=0.8,
-                               markeredgecolor='black', markeredgewidth=0.5,
+                               markeredgewidth=0.5,
                                label=model_display)
             model_handles.append(handle)
         
@@ -650,8 +743,13 @@ def create_per_dataset_summary(summary_df: pd.DataFrame, save_dir: str):
         # Plot with model names as text annotations
         for _, row in dataset_data.iterrows():
             color = exp_colors.get(row['exp_type'], '#888888')
+            
+            # Check if marker is filled or unfilled (using same logic as above)
+            unfilled_markers = {'+', 'x', '|', '_', 'X'}
+            # For annotations, we don't use markers, so linewidth is always 0.5
+            
             ax2.scatter(row['mean_conf_correct'], row['mean_conf_incorrect'], 
-                       c=[color], s=120, alpha=0.7, edgecolors='black', linewidth=0.5)
+                       c=[color], s=120, alpha=0.7, linewidth=0.5)
             
             # Add model name as annotation using MODEL_NAME_MAPPING
             model_display = MODEL_NAME_MAPPING.get(row['model'], row['model'])
@@ -703,4 +801,295 @@ def create_per_dataset_summary(summary_df: pd.DataFrame, save_dir: str):
         print(f"   • {dataset.upper()}:")
         print(f"     - calibration_summary_{dataset.lower()}.pdf/png")
         print(f"     - calibration_summary_{dataset.lower()}_annotated.pdf/png")
-        print(f"     - enhanced_summary_statistics_{dataset.lower()}.csv") 
+        print(f"     - enhanced_summary_statistics_{dataset.lower()}.csv")
+
+
+def load_experiment_results(base_dir: str = ".") -> Dict:
+    """Automatically discover and load all experiment results from the directory structure
+    
+    Args:
+        base_dir: Base directory to search for experiment results
+        
+    Returns:
+        Dictionary with experiment data in the format expected by plotting functions
+    """
+    all_data = {}
+    
+    # Define the experiment types we're looking for
+    exp_types = ["cot_exp", 
+    "zs_exp"]
+    # "verbalized", "verbalized_cot", "otherAI", "otherAI_cot", 
+    #              "otherAI_verbalized", "otherAI_verbalized_cot"]
+    
+    # Search for JSON result files
+    pattern = os.path.join(base_dir, "**", "*_records_*.json")
+    result_files = glob.glob(pattern, recursive=True)
+    
+    # Filter out files in archive or tracing folders
+    result_files = [f for f in result_files if "archive" not in f.lower() and "tracing" not in f.lower()]
+    
+    print(f"🔍 Found {len(result_files)} result files (excluding archive and tracing folders):")
+    
+    for file_path in result_files:
+        try:
+            # Extract metadata from file path and name
+            rel_path = os.path.relpath(file_path, base_dir)
+            path_parts = rel_path.split(os.sep)
+            
+            if len(path_parts) < 2:
+                print(f"⚠️  Skipping {file_path} - unexpected path structure")
+                continue
+                
+            exp_type = path_parts[0]
+            dataset = path_parts[1]
+            filename = os.path.basename(file_path)
+            
+            # Parse filename: {exp_type}_records_{split}_{model_name}.json
+            filename_parts = filename.replace('.json', '').split('_')
+            if len(filename_parts) < 4:
+                print(f"⚠️  Skipping {file_path} - unexpected filename format")
+                continue
+                
+            # Find where 'records' appears to split the filename correctly
+            records_idx = None
+            for i, part in enumerate(filename_parts):
+                if part == 'records':
+                    records_idx = i
+                    break
+                    
+            if records_idx is None:
+                print(f"⚠️  Skipping {file_path} - 'records' not found in filename")
+                continue
+                
+            split = filename_parts[records_idx + 1]
+            model_name = '_'.join(filename_parts[records_idx + 2:])
+            
+            print(f"   📁 {exp_type}/{dataset}/{split} - {model_name}")
+            
+            # Load the JSON data
+            with open(file_path, 'r') as f:
+                records = json.load(f)
+                
+            if not records:
+                print(f"⚠️  Empty results in {file_path}")
+                continue
+                
+            # Convert to DataFrame and add required columns
+            df = pd.DataFrame(records)
+            
+            # Ensure required columns exist
+            if 'p_true' not in df.columns or 'correct' not in df.columns:
+                print(f"⚠️  Missing required columns in {file_path}")
+                continue
+                
+            # Create metadata
+            metadata = {
+                'model_name': model_name,
+                'dataset': dataset,
+                'split': split,
+                'exp_type': exp_type,
+                'file_path': file_path
+            }
+            
+            # Create unique key for this experiment
+            key = f"{exp_type}_{dataset}_{split}_{model_name}"
+            all_data[key] = (df, metadata)
+            
+        except Exception as e:
+            print(f"❌ Error loading {file_path}: {e}")
+            continue
+    
+    print(f"\n✅ Successfully loaded {len(all_data)} experiments")
+    return all_data
+
+
+def print_experiment_summary(all_data: Dict):
+    """Print a summary of loaded experiments"""
+    
+    if not all_data:
+        print("❌ No experiment data loaded")
+        return
+        
+    print(f"\n📊 Experiment Summary:")
+    print(f"   Total experiments: {len(all_data)}")
+    
+    # Group by experiment type
+    exp_types = {}
+    datasets = set()
+    models = set()
+    
+    for key, (df, metadata) in all_data.items():
+        exp_type = metadata['exp_type']
+        dataset = metadata['dataset']
+        model = metadata['model_name']
+        
+        if exp_type not in exp_types:
+            exp_types[exp_type] = []
+        exp_types[exp_type].append(metadata)
+        
+        datasets.add(dataset)
+        models.add(model)
+    
+    print(f"   Experiment types: {list(exp_types.keys())}")
+    print(f"   Datasets: {sorted(datasets)}")
+    print(f"   Models: {sorted(models)}")
+    
+    print(f"\n📋 Detailed breakdown:")
+    for exp_type, experiments in exp_types.items():
+        exp_name = EXP_TYPE_MAPPING.get(exp_type, exp_type)
+        print(f"   • {exp_name} ({exp_type}): {len(experiments)} experiments")
+        
+        # Group by dataset
+        dataset_counts = {}
+        for exp in experiments:
+            dataset = exp['dataset']
+            if dataset not in dataset_counts:
+                dataset_counts[dataset] = 0
+            dataset_counts[dataset] += 1
+        
+        for dataset, count in sorted(dataset_counts.items()):
+            print(f"     - {dataset}: {count} model(s)")
+
+
+def validate_data_completeness(all_data: Dict):
+    """Check for missing experiments and suggest what to run"""
+    
+    # Get available experiments
+    available = set()
+    for key, (df, metadata) in all_data.items():
+        available.add((metadata['exp_type'], metadata['dataset'], metadata['model_name']))
+    
+    # Check for missing counterparts (CoT vs ZS pairs)
+    models_datasets = set()
+    for exp_type, dataset, model in available:
+        models_datasets.add((dataset, model))
+    
+    missing_pairs = []
+    for dataset, model in models_datasets:
+        has_cot = ('cot_exp', dataset, model) in available
+        has_zs = ('zs_exp', dataset, model) in available
+        
+        if has_cot and not has_zs:
+            missing_pairs.append(f"zs_exp for {model} on {dataset}")
+        elif has_zs and not has_cot:
+            missing_pairs.append(f"cot_exp for {model} on {dataset}")
+    
+    if missing_pairs:
+        print(f"\n⚠️  Missing experiment pairs for comparison:")
+        for missing in missing_pairs:
+            print(f"   • {missing}")
+    else:
+        print(f"\n✅ All CoT/ZS experiment pairs are complete")
+
+
+def main():
+    """Main function with CLI interface"""
+    parser = argparse.ArgumentParser(
+        description="Generate summary plots for model confidence calibration analysis",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Analyze all experiments in current directory
+  python summary_plots.py
+  
+  # Analyze experiments in specific directory
+  python summary_plots.py --base_dir /path/to/experiments
+  
+  # Save plots to specific directory
+  python summary_plots.py --output_dir my_analysis_plots
+  
+  # Only show summary without generating plots
+  python summary_plots.py --summary_only
+        """
+    )
+    
+    parser.add_argument(
+        "--base_dir",
+        type=str,
+        default=".",
+        help="Base directory to search for experiment results (default: current directory)"
+    )
+    
+    parser.add_argument(
+        "--output_dir", 
+        type=str,
+        default="summary_plots",
+        help="Directory to save output plots and analysis (default: summary_plots)"
+    )
+    
+    parser.add_argument(
+        "--summary_only",
+        action="store_true",
+        help="Only print experiment summary without generating plots"
+    )
+    
+    parser.add_argument(
+        "--verbose",
+        action="store_true", 
+        help="Print verbose output during processing"
+    )
+    
+    args = parser.parse_args()
+    
+    print("🚀 Model Confidence Calibration Analysis")
+    print("=" * 50)
+    
+    # Load experiment results
+    print(f"📂 Searching for experiments in: {os.path.abspath(args.base_dir)}")
+    all_data = load_experiment_results(args.base_dir)
+    
+    if not all_data:
+        print("❌ No experiment results found!")
+        print("\nMake sure you have run experiments using local_unified_calib_vllm.py")
+        print("Expected directory structure:")
+        print("  {exp_type}/{dataset}/{exp_type}_records_{split}_{model_name}.json")
+        return
+    
+    # Print summary
+    print_experiment_summary(all_data)
+    
+    # Validate completeness
+    validate_data_completeness(all_data)
+    
+    if args.summary_only:
+        print(f"\n✅ Summary complete. Use without --summary_only to generate plots.")
+        return
+    
+    # Generate plots
+    print(f"\n🎨 Generating plots...")
+    print(f"   Output directory: {os.path.abspath(args.output_dir)}")
+    
+    try:
+        create_summary_plots(all_data, args.output_dir)
+        print(f"\n🎉 Analysis complete! Check '{args.output_dir}' for results.")
+        
+        # Print quick access info
+        print(f"\n📈 Key outputs:")
+        print(f"   • Enhanced summary statistics: {args.output_dir}/enhanced_summary_statistics.csv")
+        
+        # Check which plots were generated
+        exp_types = set()
+        for key, (df, metadata) in all_data.items():
+            exp_types.add(metadata['exp_type'])
+            
+        if 'cot_exp' in exp_types:
+            print(f"   • CoT performance landscape: {args.output_dir}/cot_performance_landscape.pdf")
+        if 'zs_exp' in exp_types:
+            print(f"   • ZS performance landscape: {args.output_dir}/zs_performance_landscape.pdf")
+        if 'cot_exp' in exp_types and 'zs_exp' in exp_types:
+            print(f"   • CoT vs ZS comparison: {args.output_dir}/enhanced_cot_vs_zs_comparison.pdf")
+        
+        print(f"   • Per-dataset analysis: {args.output_dir}/per_dataset/")
+        
+    except Exception as e:
+        print(f"❌ Error generating plots: {e}")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        return
+    
+    print(f"\n✅ All done! 🎊")
+
+
+if __name__ == "__main__":
+    main() 
