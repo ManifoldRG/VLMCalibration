@@ -2,6 +2,7 @@
 Dataset-specific question formatters, parsers and validators
 """
 import re
+from typing import Optional
 from simpleQA_grader_template import GRADER_TEMPLATE
 from openai import OpenAI
 import time
@@ -54,10 +55,35 @@ def parse_mmlu_answer(output: str) -> str:
         return final_answer_match.group(1)
     return None
 
-def parse_medmcqa_answer(output: str) -> str:
-    final_answer_match = re.search(r"The final answer is ([A-D])", output)
-    if final_answer_match:
-        return final_answer_match.group(1)
+def parse_medmcqa_answer(output: str) -> Optional[str]:
+    """Parse an answer letter (A-D) from model output for MedMCQA.
+    Supports:
+    - The final/correct answer is [:/-] 'C'/“C”/C and with markdown **C**, *C*, __C__, _C_
+    - \boxed{C} or $\boxed{C}$
+    - \text{C} or $\text{C}$
+    """
+    answer_re = re.compile(r"""
+    (?:
+        (?:the\s+)?                             # optional 'the'
+        (?:(?:final|correct)\s+)?               # optional 'final'/'correct'
+        answer\s+is                             # 'answer is'
+        \s*[:\-]?\s*                            # optional ':' or '-'
+        [“"'*_]*                                # optional quotes/bold/italics markers
+        (?P<letter1>[A-D])                      # the letter
+        [”"'*_]*                                # optional closing quotes/bold/italics
+    )
+    |
+    \$?\s*\\boxed\{\s*(?P<letter2>[A-D])\s*\}\s*\$?   # \\boxed{C} with optional $...$
+    |
+    \$?\s*\\text\{\s*(?P<letter3>[A-D])\s*\}\s*\$?    # \\text{C} with optional $...$
+    """, re.IGNORECASE | re.VERBOSE)
+
+    m = answer_re.search(output)
+    if m:
+        for g in m.groups():
+            if g:
+                return g.upper()
+
     return None
 
 def parse_simpleqa_answer(output: str) -> str:
@@ -73,15 +99,14 @@ def parse_truthfulqa_answer(output: str) -> str:
 def parse_verbalized_confidence(output: str) -> float:
     """Parse verbalized confidence score from model output.
     
-    Expected format: "Confidence: <number between 0.0 and 1.0>"
+    Expected format: "Confidence: <number between 0 and 1>"
     Returns the confidence score as a float, or None if not found.
     """
     confidence_match = re.search(r"Confidence:\s*([0-9]*\.?[0-9]+)", output, re.IGNORECASE)
     if confidence_match:
         try:
             confidence = float(confidence_match.group(1))
-            # Clamp to valid range [0.0, 1.0]
-            return max(0.0, min(1.0, confidence))
+            return confidence
         except ValueError:
             return None
     return None
@@ -220,3 +245,6 @@ Response (TRUTHFUL or UNTRUTHFUL):"""
             print(f"TruthfulQA grading attempt {attempt + 1} failed: {e}. Retrying in {delay} seconds...")
             time.sleep(delay)
             delay *= 2  # Exponential backoff
+
+if __name__ == "__main__":
+    print(parse_medmcqa_answer("The final answer is $\\boxed{C}$"))

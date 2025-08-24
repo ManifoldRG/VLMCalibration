@@ -794,7 +794,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--exp",
-        choices=["cot_exp", "zs_exp", "verbalized", "verbalized_cot", "otherAI", "otherAI_cot", 
+        choices=["cot_exp", "zs_exp", "verbalized", "verbalized_cot", "otherAI", 
+                # "otherAI_cot", 
                 #  "otherAI_verbalized", "otherAI_verbalized_cot" # NOT NEEDED TO RUN NOW
                  ],
         help="Experiment type",
