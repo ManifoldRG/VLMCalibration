@@ -182,6 +182,49 @@ def format_question(task):
 # Inference helpers – all HTTP calls target the local vLLM server
 # ---------------------------------------------------------------------------
 
+
+def _needs_user_prompt(model_name: str) -> bool:
+    return any(keyword in model_name.lower() for keyword in ["google", "deepseek"])
+
+
+def _start_messages_for_question(question_str: str, model_name: str):
+    """Create the initial messages array for asking the question.
+
+    Preserves existing behavior:
+    - Google/DeepSeek: single user message with system text prefixed
+    - Others: system + user
+    """
+    if _needs_user_prompt(model_name):
+        return [
+            {"role": "user", "content": "You are a helpful assistant. " + question_str},
+        ]
+    return [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": question_str},
+    ]
+
+
+def _wrap_other_ai(question_str: str, response_text: str, include_system_prefix: bool) -> str:
+    """Return the combined user content that wraps another AI's answer.
+
+    If include_system_prefix=True (Google/DeepSeek), prefix the helper text.
+    """
+    prefix = "You are a helpful assistant. " if include_system_prefix else ""
+    return (
+        f"{prefix}You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
+        f"Question: {question_str}\n\n"
+        f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
+    )
+
+
+def _append_assistant(messages, content: str):
+    messages.append({"role": "assistant", "content": content})
+
+
+def _append_user(messages, content: str):
+    messages.append({"role": "user", "content": content})
+
+
 def get_initial_response(task):
     try:
         url = task["url"]
@@ -191,28 +234,12 @@ def get_initial_response(task):
         exp_type = task["exp_type"]
         model_name = task["model_name"]
 
-        # Check if model requires system prompt to be moved to user prompt
-        needs_user_prompt = any(keyword in model_name.lower() for keyword in ["google", "deepseek"])
-
-        if needs_user_prompt:
-            # For Google/DeepSeek models, combine system message with user message
-            payload = {
-                "messages": [
-                    {"role": "user", "content": "You are a helpful assistant. " + question_str},
-                ],
-                "temperature": temp,
-                "max_tokens": max_tokens,
-            }
-        else:
-            # For other models, use separate system and user messages
-            payload = {
-                "messages": [
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": question_str},
-                ],
-                "temperature": temp,
-                "max_tokens": max_tokens,
-            }
+        messages = _start_messages_for_question(question_str, model_name)
+        payload = {
+            "messages": messages,
+            "temperature": temp,
+            "max_tokens": max_tokens,
+        }
 
         response = send_request(payload, url)
         if not response:
@@ -244,65 +271,51 @@ def get_cot_explanation(task):
         exp_type = task["exp_type"]
         model_name = task["model_name"]
 
-        # Check if model requires system prompt to be moved to user prompt
-        needs_user_prompt = any(keyword in model_name.lower() for keyword in ["google", "deepseek"])
+        needs_user_prompt = _needs_user_prompt(model_name)
 
         # Use different message format and prompts based on experiment type
         if exp_type in ["otherAI_cot", "otherAI_verbalized_cot"]:
             # For "other AI" experiments, include the answer in the user prompt with tags
-            cot_prompt = (
-                f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
-                f"Question: {question_str}\n\n"
-                f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
-                f"Before answering whether the above answer given by another AI is correct, "
+            base_prompt = _wrap_other_ai(question_str, response_text, include_system_prefix=needs_user_prompt)
+            cot_suffix = (
+                "Before answering whether the above answer given by another AI is correct, "
                 "please provide a detailed chain-of-thought explanation of "
                 "your reasoning. Explain step-by-step how you arrived at "
                 "your answer and why you think it is correct or might be "
                 "incorrect."
             )
-            
+            combined = base_prompt + cot_suffix
             if needs_user_prompt:
                 messages = [
-                    {"role": "user", "content": "You are a helpful assistant. " + cot_prompt},
+                    {"role": "user", "content": combined},
                 ]
             else:
                 messages = [
                     {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": cot_prompt},
+                    {"role": "user", "content": combined},
                 ]
         else:
             # For original experiments, use appropriate format and original prompt
             if needs_user_prompt:
-                messages = [
-                    {"role": "user", "content": "You are a helpful assistant. " + question_str},
-                    {"role": "assistant", "content": response_text},
-                    {
-                        "role": "user",
-                        "content": (
-                            "Before answering whether your above answer is correct, "
-                            "please provide a detailed chain-of-thought explanation of "
-                            "your reasoning. Explain step-by-step how you arrived at "
-                            "your answer and why you think it is correct or might be "
-                            "incorrect."
-                        ),
-                    },
-                ]
+                messages = _start_messages_for_question(question_str, model_name)
+                _append_assistant(messages, response_text)
+                _append_user(messages, (
+                    "Before answering whether your above answer is correct, "
+                    "please provide a detailed chain-of-thought explanation of "
+                    "your reasoning. Explain step-by-step how you arrived at "
+                    "your answer and why you think it is correct or might be "
+                    "incorrect."
+                ))
             else:
-                messages = [
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": question_str},
-                    {"role": "assistant", "content": response_text},
-                    {
-                        "role": "user",
-                        "content": (
-                            "Before answering whether your above answer is correct, "
-                            "please provide a detailed chain-of-thought explanation of "
-                            "your reasoning. Explain step-by-step how you arrived at "
-                            "your answer and why you think it is correct or might be "
-                            "incorrect."
-                        ),
-                    },
-                ]
+                messages = _start_messages_for_question(question_str, model_name)
+                _append_assistant(messages, response_text)
+                _append_user(messages, (
+                    "Before answering whether your above answer is correct, "
+                    "please provide a detailed chain-of-thought explanation of "
+                    "your reasoning. Explain step-by-step how you arrived at "
+                    "your answer and why you think it is correct or might be "
+                    "incorrect."
+                ))
 
         payload = {
             "messages": messages,
@@ -337,34 +350,31 @@ def get_confidence_score(task):
         exp_type = task["exp_type"]
         model_name = task["model_name"]
 
-        # Check if model requires system prompt to be moved to user prompt
-        needs_user_prompt = any(keyword in model_name.lower() for keyword in ["google", "deepseek"])
+        needs_user_prompt = _needs_user_prompt(model_name)
 
         # Build conversation based on experiment type
         if exp_type == "otherAI_cot":
             # For otherAI_cot, recreate the conversation that led to the CoT
             cot_text = task["cot_text"]
-            cot_prompt = (
-                f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
-                f"Question: {question_str}\n\n"
-                f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
-                f"Before answering whether the other AI's answer is correct or incorrect, "
+            base_prompt = _wrap_other_ai(question_str, response_text, include_system_prefix=needs_user_prompt)
+            cot_suffix = (
+                "Before answering whether the other AI's answer is correct or incorrect, "
                 "please provide a detailed chain-of-thought explanation of "
                 "your reasoning. Analyze the other AI's answer step-by-step, "
                 "explain your evaluation process, and determine whether "
                 "the other AI's answer is correct or incorrect and why."
             )
+            combined = base_prompt + cot_suffix
             if needs_user_prompt:
                 messages = [
-                    {"role": "user", "content": "You are a helpful assistant. " + cot_prompt},
-                    {"role": "assistant", "content": cot_text},
+                    {"role": "user", "content": combined},
                 ]
             else:
                 messages = [
                     {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": cot_prompt},
-                    {"role": "assistant", "content": cot_text},
+                    {"role": "user", "content": combined},
                 ]
+            _append_assistant(messages, cot_text)
         else:
             # For other experiment types, use original logic
             if exp_type == "otherAI":
@@ -374,54 +384,34 @@ def get_confidence_score(task):
                 
                 if needs_user_prompt:
                     # For Google/DeepSeek models, combine system message with user message
-                    combined_prompt = (
-                        f"You are a helpful assistant. You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
-                        f"Question: {question_str}\n\n"
-                        f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
-                        f"{final_prompt}"
-                    )
+                    combined_prompt = _wrap_other_ai(question_str, response_text, include_system_prefix=True) + final_prompt
                     messages = [{"role": "user", "content": combined_prompt}]
                 else:
                     # For other models, use separate system and user messages
-                    combined_prompt = (
-                        f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
-                        f"Question: {question_str}\n\n"
-                        f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
-                        f"{final_prompt}"
-                    )
+                    combined_prompt = _wrap_other_ai(question_str, response_text, include_system_prefix=False) + final_prompt
                     messages = [
                         {"role": "system", "content": "You are a helpful assistant."},
                         {"role": "user", "content": combined_prompt},
                     ]
             elif needs_user_prompt:
                 # For Google/DeepSeek models, combine system message with user message
-                messages = [
-                    {"role": "user", "content": "You are a helpful assistant. " + question_str},
-                    {"role": "assistant", "content": response_text},
-                ]
+                messages = _start_messages_for_question(question_str, model_name)
+                _append_assistant(messages, response_text)
             else:
                 # For other models, use separate system and user messages
-                messages = [
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": question_str},
-                    {"role": "assistant", "content": response_text},
-                ]
+                messages = _start_messages_for_question(question_str, model_name)
+                _append_assistant(messages, response_text)
 
             if exp_type == "cot_exp":
                 cot_text = task["cot_text"]
-                messages.extend([
-                    {
-                        "role": "user",
-                        "content": (
-                            "Before answering whether your above answer is correct, "
-                            "please provide a detailed chain-of-thought explanation of "
-                            "your reasoning. Explain step-by-step how you arrived at "
-                            "your answer and why you think it is correct or might be "
-                            "incorrect."
-                        ),
-                    },
-                    {"role": "assistant", "content": cot_text},
-                ])
+                _append_user(messages, (
+                    "Before answering whether your above answer is correct, "
+                    "please provide a detailed chain-of-thought explanation of "
+                    "your reasoning. Explain step-by-step how you arrived at "
+                    "your answer and why you think it is correct or might be "
+                    "incorrect."
+                ))
+                _append_assistant(messages, cot_text)
 
         # Use different final prompt based on experiment type
         if exp_type in ["otherAI", "otherAI_cot"]:
@@ -429,16 +419,10 @@ def get_confidence_score(task):
             # Only append for otherAI_cot which doesn't use the combined prompt logic
             if exp_type == "otherAI_cot":
                 final_prompt = "Is the above answer given by the other AI true or false? Answer only with the single word 'true' or 'false'."
-                messages.append({
-                    "role": "user",
-                    "content": final_prompt,
-                })
+                _append_user(messages, final_prompt)
         else:
             final_prompt = "Is the above answer true or false? Answer only with the single word 'true' or 'false'."
-            messages.append({
-                "role": "user",
-                "content": final_prompt,
-            })
+            _append_user(messages, final_prompt)
 
         # Format request according to vLLM OpenAI-compatible API
         payload = {
@@ -500,8 +484,7 @@ def get_verbalized_confidence(task):
         exp_type = task["exp_type"]
         model_name = task["model_name"]
 
-        # Check if model requires system prompt to be moved to user prompt
-        needs_user_prompt = any(keyword in model_name.lower() for keyword in ["google", "deepseek"])
+        needs_user_prompt = _needs_user_prompt(model_name)
 
         # Use different message format based on model type
         if exp_type in ["otherAI_verbalized", "otherAI_verbalized_cot"]:
@@ -511,38 +494,23 @@ def get_verbalized_confidence(task):
             
             if needs_user_prompt:
                 # For Google/DeepSeek models, combine system message with user message
-                combined_prompt = (
-                    f"You are a helpful assistant. You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
-                    f"Question: {question_str}\n\n"
-                    f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
-                    f"{final_prompt}"
-                )
+                combined_prompt = _wrap_other_ai(question_str, response_text, include_system_prefix=True) + final_prompt
                 messages = [{"role": "user", "content": combined_prompt}]
             else:
                 # For other models, use separate system and user messages
-                combined_prompt = (
-                    f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
-                    f"Question: {question_str}\n\n"
-                    f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
-                    f"{final_prompt}"
-                )
+                combined_prompt = _wrap_other_ai(question_str, response_text, include_system_prefix=False) + final_prompt
                 messages = [
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": combined_prompt},
                 ]
         elif needs_user_prompt:
             # For Google/DeepSeek models, combine system message with user message
-            messages = [
-                {"role": "user", "content": "You are a helpful assistant. " + question_str},
-                {"role": "assistant", "content": response_text},
-            ]
+            messages = _start_messages_for_question(question_str, model_name)
+            _append_assistant(messages, response_text)
         else:
             # For other models, use separate system and user messages
-            messages = [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": question_str},
-                {"role": "assistant", "content": response_text},
-            ]
+            messages = _start_messages_for_question(question_str, model_name)
+            _append_assistant(messages, response_text)
 
         if exp_type == "verbalized_cot":
             cot_text = task["cot_text"]
@@ -561,21 +529,15 @@ def get_verbalized_confidence(task):
             ])
         elif exp_type == "otherAI_verbalized_cot":
             cot_text = task["cot_text"]
-            # Include the same CoT prompt that was used to generate the explanation
-            cot_prompt = (
-                f"You are given another AI's answer to the following question within <ANOTHER_AI_ANSWER> tags.\n\n"
-                f"Question: {question_str}\n\n"
-                f"<ANOTHER_AI_ANSWER>\n{response_text}\n</ANOTHER_AI_ANSWER>\n\n"
-                f"Before answering whether the above answer given by another AI is correct, "
+            cot_prompt = _wrap_other_ai(question_str, response_text, include_system_prefix=False) + (
+                "Before answering whether the above answer given by another AI is correct, "
                 "please provide a detailed chain-of-thought explanation of "
                 "your reasoning. Explain step-by-step how you arrived at "
                 "your answer and why you think it is correct or might be "
                 "incorrect."
             )
-            messages.extend([
-                {"role": "user", "content": cot_prompt},
-                {"role": "assistant", "content": cot_text},
-            ])
+            _append_user(messages, cot_prompt)
+            _append_assistant(messages, cot_text)
 
         # Use different final prompt based on experiment type
         if exp_type in ["otherAI", "otherAI_cot", "otherAI_verbalized", "otherAI_verbalized_cot"]:
@@ -583,16 +545,10 @@ def get_verbalized_confidence(task):
             # Only append for otherAI_verbalized_cot which doesn't use the combined prompt logic
             if exp_type == "otherAI_verbalized_cot":
                 final_prompt = "How confident are you that the above answer given by another AI is correct? Please respond only in the format: Confidence: <number between 0.0 and 1.0>"
-                messages.append({
-                    "role": "user",
-                    "content": final_prompt,
-                })
+                _append_user(messages, final_prompt)
         else:
             final_prompt = "How confident are you that your above answer is correct? Please respond only in the format: Confidence: <number between 0.0 and 1.0>"
-            messages.append({
-                "role": "user",
-                "content": final_prompt,
-            })
+            _append_user(messages, final_prompt)
 
         # Format request according to vLLM OpenAI-compatible API
         payload = {
