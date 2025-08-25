@@ -49,18 +49,13 @@ def parse_gsm8k_answer(output: str) -> int:
     matches = re.findall(r"\$?(\d+,?\d*)", output)
     return int(matches[-1].replace(",", "")) if matches else None
 
-def parse_mmlu_answer(output: str) -> str:
-    final_answer_match = re.search(r"The final answer is ([A-D])", output)
-    if final_answer_match:
-        return final_answer_match.group(1)
-    return None
-
-def parse_medmcqa_answer(output: str) -> Optional[str]:
-    """Parse an answer letter (A-D) from model output for MedMCQA.
+def parse_mmlu_answer(output: str) -> Optional[str]:
+    """Parse an answer letter (A-D) from model output for MMLU.
     Supports:
-    - The final/correct answer is [:/-] 'C'/“C”/C and with markdown **C**, *C*, __C__, _C_
+    - The final/correct answer is [:/-] 'C'/"C"/C and with markdown **C**, *C*, __C__, _C_
     - \boxed{C} or $\boxed{C}$
     - \text{C} or $\text{C}$
+    - **[A-D]: fallback pattern
     """
     answer_re = re.compile(r"""
     (?:
@@ -68,9 +63,9 @@ def parse_medmcqa_answer(output: str) -> Optional[str]:
         (?:(?:final|correct)\s+)?               # optional 'final'/'correct'
         answer\s+is                             # 'answer is'
         \s*[:\-]?\s*                            # optional ':' or '-'
-        [“"'*_]*                                # optional quotes/bold/italics markers
+        [""'*_]*                                # optional quotes/bold/italics markers
         (?P<letter1>[A-D])                      # the letter
-        [”"'*_]*                                # optional closing quotes/bold/italics
+        [""'*_]*                                # optional closing quotes/bold/italics
     )
     |
     \$?\s*\\boxed\{\s*(?P<letter2>[A-D])\s*\}\s*\$?   # \\boxed{C} with optional $...$
@@ -83,6 +78,142 @@ def parse_medmcqa_answer(output: str) -> Optional[str]:
         for g in m.groups():
             if g:
                 return g.upper()
+
+    # Fallback patterns
+    fallback_re = re.compile(r'\*\*([A-D]):', re.IGNORECASE)
+    fallback_match = fallback_re.search(output)
+    if fallback_match:
+        return fallback_match.group(1).upper()
+
+    # Additional fallback for "Answer: C" format
+    answer_colon_re = re.compile(r'Answer:\s*([A-D])', re.IGNORECASE)
+    answer_colon_match = answer_colon_re.search(output)
+    if answer_colon_match:
+        return answer_colon_match.group(1).upper()
+
+    # Additional fallback for "The final answer is [C]" format
+    final_answer_bracket_re = re.compile(r'The final answer is \[([A-D])\]', re.IGNORECASE)
+    final_answer_bracket_match = final_answer_bracket_re.search(output)
+    if final_answer_bracket_match:
+        return final_answer_bracket_match.group(1).upper()
+
+    # Additional fallback for "Final Answer: D" and "**Final Answer:** D" (optional colon after letter)
+    final_answer_tag_re = re.compile(r'(?:\*\*Final Answer:\*\*|Final Answer:)\s*([A-D])(?:\s*:|\b|$)', re.IGNORECASE)
+    final_answer_tag_match = final_answer_tag_re.search(output)
+    if final_answer_tag_match:
+        return final_answer_tag_match.group(1).upper()
+    # Targeted fallback: phrases like "making option C the correct answer" or
+    # "option C is the correct answer" (narrow to avoid overmatching)
+    option_correct_re = re.compile(r"\b(?:making|makes)\s+option\s+([A-D])\s+the\s+correct\s+answer\b", re.IGNORECASE)
+    option_correct_match = option_correct_re.search(output)
+    if option_correct_match:
+        _s, _e = option_correct_match.start(0), option_correct_match.end(0)
+        _ctx = output[max(0, _s-40): min(len(output), _e+40)]
+        print(f"[parse_mmlu_answer] option-correct fallback context: {_ctx}")
+        return option_correct_match.group(1).upper()
+
+    option_is_correct_re = re.compile(r"\boption\s+([A-D])\s+is\s+the\s+correct\s+answer\b", re.IGNORECASE)
+    option_is_correct_match = option_is_correct_re.search(output)
+    if option_is_correct_match:
+        _s, _e = option_is_correct_match.start(0), option_is_correct_match.end(0)
+        _ctx = output[max(0, _s-40): min(len(output), _e+40)]
+        print(f"[parse_mmlu_answer] option-correct fallback context: {_ctx}")
+        return option_is_correct_match.group(1).upper()
+
+    # Targeted fallback: a single line starting with "A:"/"B:"/"C:"/"D:".
+    # Only use if exactly one such line exists to avoid picking from enumerations.
+    line_letter_colon_re = re.compile(r"(?m)^(?:\s*)([A-D])\s*:\s")
+    letter_colon_matches = list(line_letter_colon_re.finditer(output))
+    if len(letter_colon_matches) == 1:
+        m2 = letter_colon_matches[0]
+        _s, _e = m2.start(0), m2.end(0)
+        _ctx = output[max(0, _s-40): min(len(output), _e+40)]
+        print(f"[parse_mmlu_answer] line-letter-colon fallback context: {_ctx}")
+        return m2.group(1).upper()
+
+    return None
+
+def parse_medmcqa_answer(output: str) -> Optional[str]:
+    """Parse an answer letter (A-D) from model output for MedMCQA.
+    Supports:
+    - The final/correct answer is [:/-] 'C'/"C"/C and with markdown **C**, *C*, __C__, _C_
+    - \boxed{C} or $\boxed{C}$
+    - \text{C} or $\text{C}$
+    - **[A-D]: fallback pattern
+    """
+    answer_re = re.compile(r"""
+    (?:
+        (?:the\s+)?                             # optional 'the'
+        (?:(?:final|correct)\s+)?               # optional 'final'/'correct'
+        answer\s+is                             # 'answer is'
+        \s*[:\-]?\s*                            # optional ':' or '-'
+        [""'*_]*                                # optional quotes/bold/italics markers
+        (?P<letter1>[A-D])                      # the letter
+        [""'*_]*                                # optional closing quotes/bold/italics
+    )
+    |
+    \$?\s*\\boxed\{\s*(?P<letter2>[A-D])\s*\}\s*\$?   # \\boxed{C} with optional $...$
+    |
+    \$?\s*\\text\{\s*(?P<letter3>[A-D])\s*\}\s*\$?    # \\text{C} with optional $...$
+    """, re.IGNORECASE | re.VERBOSE)
+
+    m = answer_re.search(output)
+    if m:
+        for g in m.groups():
+            if g:
+                return g.upper()
+
+    # Fallback patterns
+    fallback_re = re.compile(r'\*\*([A-D]):', re.IGNORECASE)
+    fallback_match = fallback_re.search(output)
+    if fallback_match:
+        return fallback_match.group(1).upper()
+
+    # Additional fallback for "Answer: C" format
+    answer_colon_re = re.compile(r'Answer:\s*([A-D])', re.IGNORECASE)
+    answer_colon_match = answer_colon_re.search(output)
+    if answer_colon_match:
+        return answer_colon_match.group(1).upper()
+
+    # Additional fallback for "The final answer is [C]" format
+    final_answer_bracket_re = re.compile(r'The final answer is \[([A-D])\]', re.IGNORECASE)
+    final_answer_bracket_match = final_answer_bracket_re.search(output)
+    if final_answer_bracket_match:
+        return final_answer_bracket_match.group(1).upper()
+
+    # Additional fallback for "Final Answer: D" and "**Final Answer:** D" (optional colon after letter)
+    final_answer_tag_re = re.compile(r'(?:\*\*Final Answer:\*\*|Final Answer:)\s*([A-D])(?:\s*:|\b|$)', re.IGNORECASE)
+    final_answer_tag_match = final_answer_tag_re.search(output)
+    if final_answer_tag_match:
+        return final_answer_tag_match.group(1).upper()
+    # Targeted fallback: phrases like "making option C the correct answer" or
+    # "option C is the correct answer" (narrow to avoid overmatching)
+    option_correct_re = re.compile(r"\b(?:making|makes)\s+option\s+([A-D])\s+the\s+correct\s+answer\b", re.IGNORECASE)
+    option_correct_match = option_correct_re.search(output)
+    if option_correct_match:
+        _s, _e = option_correct_match.start(0), option_correct_match.end(0)
+        _ctx = output[max(0, _s-40): min(len(output), _e+40)]
+        print(f"[parse_medmcqa_answer] option-correct fallback context: {_ctx}")
+        return option_correct_match.group(1).upper()
+
+    option_is_correct_re = re.compile(r"\boption\s+([A-D])\s+is\s+the\s+correct\s+answer\b", re.IGNORECASE)
+    option_is_correct_match = option_is_correct_re.search(output)
+    if option_is_correct_match:
+        _s, _e = option_is_correct_match.start(0), option_is_correct_match.end(0)
+        _ctx = output[max(0, _s-40): min(len(output), _e+40)]
+        print(f"[parse_medmcqa_answer] option-correct fallback context: {_ctx}")
+        return option_is_correct_match.group(1).upper()
+
+    # Targeted fallback: a single line starting with "A:"/"B:"/"C:"/"D:".
+    # Only use if exactly one such line exists to avoid picking from enumerations.
+    line_letter_colon_re = re.compile(r"(?m)^(?:\s*)([A-D])\s*:\s")
+    letter_colon_matches = list(line_letter_colon_re.finditer(output))
+    if len(letter_colon_matches) == 1:
+        m2 = letter_colon_matches[0]
+        _s, _e = m2.start(0), m2.end(0)
+        _ctx = output[max(0, _s-40): min(len(output), _e+40)]
+        print(f"[parse_medmcqa_answer] line-letter-colon fallback context: {_ctx}")
+        return m2.group(1).upper()
 
     return None
 
