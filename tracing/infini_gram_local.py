@@ -31,7 +31,7 @@ def create_engine(tokenizer):
     )
 
 
-def query_post_training_local(concept: str, semantic_variations: List[str]) -> Dict[str, Any]:
+def query_post_training_local(concept: str, semantic_variations: List[str], zero_points: bool=False) -> Dict[str, Any]:
     """Query post-training corpus via local engine with concept and semantic variations."""
     # Create fresh instances for this query
     tokenizer = create_tokenizer()
@@ -49,6 +49,8 @@ def query_post_training_local(concept: str, semantic_variations: List[str]) -> D
         "all_variations_data": {}    # Store all data for each variation
     }
     
+    val = 0 if zero_points else 1  # check if zero points are to be included or not
+
     # Try each variation
     for variation in variations_to_try:
         try:
@@ -61,7 +63,7 @@ def query_post_training_local(concept: str, semantic_variations: List[str]) -> D
             
             ngram_count = int(count_result.get("count", 0))
             
-            if ngram_count > 0:
+            if ngram_count >= val:
                 # Get document count
                 print(f"FIND PAYLOAD: input_ids={input_ids}")
                 find_result = engine.find(input_ids=input_ids)
@@ -155,7 +157,7 @@ def query_post_training_local(concept: str, semantic_variations: List[str]) -> D
             
             cnf_doc_count = cnf_result.get("cnt", 0)
             
-            if cnf_doc_count > 0:
+            if cnf_doc_count >= val:
                 # Get CNF n-gram count
                 print(f"COUNT_CNF PAYLOAD: cnf={cnf}")
                 cnf_count_result = engine.count_cnf(cnf=cnf)

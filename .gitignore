@@ -7,6 +7,8 @@ models*/
 *.log
 *.pdf
 truthfulqa.json
+venv/
+llama.cpp/
 plots/
 summary_plots/
 family_analysis/

@@ -38,7 +38,7 @@ def post_request(payload: Dict[str, Any], retries: int = 3, backoff: float = 0.5
     return {}
 
 
-def query_pretraining_api(concept: str, semantic_variations: List[str]) -> Dict[str, Any]:
+def query_pretraining_api(concept: str, semantic_variations: List[str], zero_points: bool) -> Dict[str, Any]:
     """Query pretraining corpus via API with concept and semantic variations."""
     index = PRETRAINING_INDEX
     result = {
@@ -51,6 +51,7 @@ def query_pretraining_api(concept: str, semantic_variations: List[str]) -> Dict[
     if concept not in variations_to_try:
         variations_to_try.insert(0, concept)
     
+    val = 0 if zero_points else 1 # check for zero points to be included
     # Try each variation
     for variation in variations_to_try:
         try:
@@ -68,7 +69,7 @@ def query_pretraining_api(concept: str, semantic_variations: List[str]) -> Dict[
                     ngram_count = int(count_result.get("count", 0))
                     
                     # Store data for this variation
-                    if doc_count > 0 or ngram_count > 0:
+                    if doc_count >= val or ngram_count >= val:
                         result["all_variations_data"][variation] = {
                             "doc_count": doc_count,
                             "ngram_count": ngram_count,
@@ -76,7 +77,7 @@ def query_pretraining_api(concept: str, semantic_variations: List[str]) -> Dict[
                         }
                     
                     # Get document contexts for this variation if docs exist
-                    if doc_count > 0 and "segment_by_shard" in find_result:
+                    if doc_count >= val and "segment_by_shard" in find_result:
                         document_contexts = []
                         segment_by_shard = find_result.get("segment_by_shard", [])
                         
@@ -116,7 +117,7 @@ def query_pretraining_api(concept: str, semantic_variations: List[str]) -> Dict[
                         # Store contexts for this variation
                         result["variations_contexts"][variation] = document_contexts
                         
-                        if doc_count > 0 or ngram_count > 0:
+                        if doc_count >= val or ngram_count >= val:
                             # Also store document contexts in the all_variations_data dictionary
                             result["all_variations_data"][variation]["document_contexts"] = document_contexts
             
@@ -148,7 +149,7 @@ def query_pretraining_api(concept: str, semantic_variations: List[str]) -> Dict[
                     cnf_key = f"CNF: {cnf_query}"
                     
                     # Store data for CNF query
-                    if cnf_doc_count > 0 or cnf_ngram_count > 0:
+                    if cnf_doc_count >= val or cnf_ngram_count >= val:
                         result["all_variations_data"][cnf_key] = {
                             "doc_count": cnf_doc_count,
                             "ngram_count": cnf_ngram_count,
@@ -156,7 +157,7 @@ def query_pretraining_api(concept: str, semantic_variations: List[str]) -> Dict[
                         }
                         
                         # Get document samples for CNF query
-                        if cnf_doc_count > 0 and "ptrs_by_shard" in find_result:
+                        if cnf_doc_count >= val and "ptrs_by_shard" in find_result:
                             document_contexts = []
                             ptrs_by_shard = find_result.get("ptrs_by_shard", [])
                             
